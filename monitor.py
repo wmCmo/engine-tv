@@ -11,10 +11,12 @@ Usage:
 """
 
 import argparse
+import base64
 import hashlib
 import hmac
 import json
 import secrets
+import struct
 import subprocess
 import math
 import os
@@ -27,8 +29,8 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-# HERE はこのプロジェクト（モニター・TV・キャッシュ）、WORKER は Fishtest ワーカー本体の置き場所。
-# ワーカーの場所は環境変数 FISHTEST_WORKER か --worker で変えられる
+# HERE is this project (monitor, TV, cache); WORKER is the Fishtest worker's own folder.
+# Change the worker's location with the FISHTEST_WORKER environment variable or --worker
 HERE = os.path.dirname(os.path.abspath(__file__))
 WORKER = os.environ.get("FISHTEST_WORKER") or r"C:\fishtest\worker"
 
@@ -41,7 +43,7 @@ def _worker_paths(worker):
     LOCK = os.path.join(WORKER, "fishtest_worker.lock")
     CFG = os.path.join(WORKER, "fishtest.cfg")
     TESTING = os.path.join(WORKER, "testing")
-    # ワーカーはこのファイルを見つけると、終わった対局を送ってから止まる
+    # When the worker finds this file, it reports its finished games and then stops
     FISH_EXIT = os.path.join(WORKER, "fish.exit")
 
 
@@ -535,6 +537,7 @@ def collect():
         "cfg": read_cfg(),
         "pid": pid,
         "alive": alive,
+        "watch": {"stuck": _watch["stuck"], "since": _watch["since"], "note": _watch["note"]},
         "current": current,
         "last_age_s": last_age,
         "beat_age_s": beat_age,
@@ -550,7 +553,7 @@ def collect():
     }
 
 
-# タブのアイコン（Stockfish にちなんだ魚）。モニターは暗い地に緑、TV は Duolingo 風の緑地に白で見分けられるようにする
+# Tab icons (a fish, for Stockfish): green on dark for the monitor, white on Duolingo-style green for the TV, so they're easy to tell apart
 _FISH = ('<path d="M7 32c7-11 20-15 33-10l14-9v38l-14-9C27 47 14 43 7 32z" fill="{fish}"/>'
          '<circle cx="18" cy="29" r="3.2" fill="{bg}"/>')
 FAVICONS = {
@@ -581,7 +584,7 @@ body{margin:0;font-family:var(--font);background:var(--bg);color:var(--text);
   background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);
   background-size:24px 24px}
 a{color:var(--green-b);text-decoration:none}
-/* スマホのブラウザが文字を勝手に拡大して横にはみ出さないように */
+/* Stop phone browsers from enlarging text until it overflows sideways */
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 
 header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:20px 28px;
@@ -596,6 +599,9 @@ header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:20px
 .brand small{font-size:11.5px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase}
 .livewrap{display:flex;align-items:center;gap:9px;margin-left:6px;padding:6px 13px;border-radius:20px;
   background:var(--panel);border:1px solid var(--line);font-size:13px;font-weight:600}
+.tvlink{padding:6px 13px;border-radius:20px;background:var(--panel);border:1px solid var(--line);font-size:13px;
+  font-weight:600;color:var(--text);text-decoration:none}
+.tvlink:hover{border-color:var(--green-b)}
 .dot{width:9px;height:9px;border-radius:50%}
 .on{background:var(--green);box-shadow:0 0 0 4px rgba(76,178,106,.18),0 0 12px var(--green);animation:pulse 2s infinite}
 .off{background:var(--red);box-shadow:0 0 0 4px rgba(240,100,91,.18)}
@@ -712,6 +718,12 @@ code{color:var(--green-b);font-family:ui-monospace,Consolas,monospace;font-size:
 .trophy .tile b{display:block;font-size:20px;color:var(--text)}
 .trophy .tile .lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:6px}
 .trophy .tile .lbl i{width:8px;height:8px;border-radius:50%;font-style:normal}
+.trophy .tile.click{cursor:pointer}
+.trophy .tile.click:hover{border-color:#2f4a3b}
+.trophy .tile.on{border-color:var(--green-b);background:#0f1d16}
+.trophy .tile .caret{margin-left:auto;color:var(--muted);font-size:12px}
+.trophy .orow{background:rgba(125,143,133,.06);border-color:var(--line)}
+.trophy .orow code{color:var(--text)}
 .trophy .elo{margin-top:18px;padding:14px 14px 6px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
 .trophy .ehead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .trophy .ehead .big{font-size:26px}
@@ -735,7 +747,7 @@ code{color:var(--green-b);font-family:ui-monospace,Consolas,monospace;font-size:
 .trophy .wrow{background:rgba(110,160,255,.07);border-color:#28385a}
 .trophy .wrow code{color:var(--blue)}
 .trophy .wrow .nopr{color:var(--amber);font-weight:600}
-/* スマホ：余白を詰め、ヘッダーは固定せず、右上の情報は下の行に回す */
+/* Phones: tighter spacing, a header that scrolls away, and the top-right info moved to the next line */
 @media (max-width:640px){
   header{position:static;padding:14px 16px}
   .meta{margin-left:0;flex-basis:100%;text-align:left}
@@ -756,6 +768,8 @@ code{color:var(--green-b);font-family:ui-monospace,Consolas,monospace;font-size:
   <div class="logo">🐟</div>
   <div class="brand"><b>Stockfish</b><small>Worker Monitor</small></div>
   <div class="livewrap"><span id="dot" class="dot off"></span><span id="state">—</span></div>
+  <a class="tvlink" href="/tv" title="The across-the-room view: live board and commentary">📺 TV</a>
+  <a class="tvlink" href="/net" title="Explore Stockfish's neural network, its history and the latest training experiments">🧠 Net</a>
   <div class="meta" id="meta"></div>
 </header>
 
@@ -822,7 +836,7 @@ const EXP={
  events:"A live tail of every API call your worker makes, newest first — the raw pulse of the worker talking to the server.",
  pgn:"<b>PGN</b> files are the game records fastchess writes to disk as each batch finishes, then uploads to the server. Newest first, with file size and age.",
  disk:"What the <code>testing/</code> folder is made of, by size. <b>NNUE nets</b> (the engine's neural-network eval files) and <b>opening books</b> dominate. <b>Can I tell which file 'passed'?</b> No — the <code>stockfish-&lt;sha&gt;.exe</code> files are just candidate builds; whether a patch helps is an <b>SPRT verdict decided server-side</b> across all workers, never stored locally. <b>Safe to delete?</b> Yes — anything not referenced by the current task is a leftover the worker re-downloads on demand. Green-outlined files are in use (keep); the rest are reclaimable. <span style='color:var(--amber)'>Only delete while the worker is idle — a running task holds its files open.</span>",
- trophy:"Every test your worker played games for since your local record starts, grouped by what happened to it. <b>In Stockfish</b> = the patch's branch was later merged into Stockfish master (matched by commit message, checked once a day). <b>Waiting to merge</b> = patches that passed the long round (LTC), or have an open pull request on GitHub (speed-ups and cleanups only need the short round), but aren't in master yet. Each row says whether there is a PR: “no PR” usually means its author never sent it in. Checked every 30 min. <b>Other passes</b> = everything else that went green: first-round (STC) passes with no LTC and no PR, research runs, and progression tests. <b>Still undecided</b> = the test, or the longer-TC test that followed its pass (STC → LTC), is still running on Fishtest with other people's workers (your PC plays one batch at a time). <b>Not merged</b> = it failed or was stopped, or it passed and then failed a longer TC (checked on Fishtest every 30 min). <b>CPU-hours</b> = games × the time control's expected game length × threads, i.e. the compute your machine donated. <b>Elo chart</b> = how much stronger the merged patches made Stockfish, each measured by Fishtest's estimate from its LTC test (or its only test). It's in <b>normalized Elo</b>, Fishtest's own unit, and the estimate is corrected for SPRT stopping early. The bars are 95% ranges: a single patch is only measured to about ±1, so the running total is the meaningful number. Patches that only had to prove they're <b>not weaker</b> (simplifications, speed-ups, cheaper nets) sit near 0 on purpose."
+ trophy:"Every test your worker played games for since your local record starts, grouped by what happened to it. <b>In Stockfish</b> = the patch's branch was later merged into Stockfish master (matched by commit message, checked once a day). Click a tile to list what's in it (click again to close). <b>Waiting to merge</b> = patches that passed the long round (LTC), or have an open pull request on GitHub (speed-ups and cleanups only need the short round), but aren't in master yet. Each row says whether there is a PR: “no PR” usually means its author never sent it in. Checked every 30 min. <b>Other passes</b> = everything else that went green: first-round (STC) passes with no LTC and no PR, research runs, and progression tests. <b>Still undecided</b> = the test, or the longer-TC test that followed its pass (STC → LTC), is still running on Fishtest with other people's workers (your PC plays one batch at a time). <b>Not merged</b> = it failed or was stopped, or it passed and then failed a longer TC (checked on Fishtest every 30 min). <b>CPU-hours</b> = games × the time control's expected game length × threads, i.e. the compute your machine donated. <b>Elo chart</b> = how much stronger the merged patches made Stockfish, each measured by Fishtest's estimate from its LTC test (or its only test). It's in <b>normalized Elo</b>, Fishtest's own unit, and the estimate is corrected for SPRT stopping early. The bars are 95% ranges: a single patch is only measured to about ±1, so the running total is the meaningful number. Patches that only had to prove they're <b>not weaker</b> (simplifications, speed-ups, cheaper nets) sit near 0 on purpose."
 };
 const TIP={
  tc:"Time control: base seconds + increment added per move.",
@@ -877,8 +891,10 @@ function donut(cats,total){
 
 async function tick(){
   let d;try{d=await(await fetch("/data")).json()}catch(e){return}
+  const stuck=!d.alive&&d.watch?.stuck;
   document.getElementById("dot").className="dot "+(d.alive?"on":"off");
-  document.getElementById("state").textContent=d.alive?"RUNNING":"IDLE";
+  document.getElementById("state").textContent=d.alive?"RUNNING":stuck?"STUCK":"IDLE";
+  document.getElementById("state").title=stuck?(d.watch.note||"Worker is alive but has been silent for 30+ minutes; the watchdog restarts it"):"";
   const c=d.cfg;
   document.getElementById("meta").innerHTML=
     `<b>${esc(c.username||"?")}</b> · ${esc(c.host||"?")}<br>${c.concurrency||"?"} cores · pid ${d.pid||"—"} · ${new Date(d.now).toLocaleTimeString()}`;
@@ -886,8 +902,8 @@ async function tick(){
   const gs=d.game_stats,el=[];
 
   el.push(card("status","Status",
-    `<div class="big ${d.alive?'g':''}">${d.alive?"RUNNING":"IDLE / STOPPED"}</div>
-     <div class="sub">worker heartbeat & liveness</div>
+    `<div class="big ${d.alive?'g':''}">${d.alive?"RUNNING":stuck?"STUCK":"IDLE / STOPPED"}</div>
+     <div class="sub">${stuck?esc(d.watch.note||"alive but silent for 30+ min · the watchdog restarts it"):"worker heartbeat & liveness"}</div>
      <div style="margin-top:12px">
        <div class="kv"><span>Last event</span><span>${fmtAge(d.last_age_s)}</span></div>
        <div class="kv"><span>Last heartbeat</span><span>${fmtAge(d.beat_age_s)}</span></div></div>`));
@@ -1000,10 +1016,10 @@ const OUTCOMES=[["merged","In Stockfish","var(--green-b)"],["waiting","Waiting t
   ["running","Still undecided","var(--amber)"],["passed","Other passes","#4a6888"],["not merged","Not merged","#55655d"]];
 const num=n=>Number(n||0).toLocaleString("en-US");
 async function loadTrophy(){
-  // 初回の集計中は「集計中」と出しておく（何も出ないと消えたように見える）
+  // While the first count runs, say so (an empty card looks like it disappeared)
   const el0=document.getElementById("trophy");
   if(el0.style.display==="none"){el0.innerHTML=`<h2>Your contribution</h2><div class="sub">🏆 Counting your contribution… (takes up to half a minute right after the monitor starts)</div>`;el0.style.display="block"}
-  // 取れなかったら（モニターの再起動中など）15 秒後にやり直す。10 分待たせない
+  // If it fails (e.g. the monitor is restarting), retry in 15 seconds rather than waiting 10 minutes
   let d;try{d=await (await fetch("/impact")).json()}catch{setTimeout(loadTrophy,15000);return}
   const T=d.totals||{},all=Object.values(T);
   const tests=all.reduce((n,t)=>n+t.tests,0),games=all.reduce((n,t)=>n+t.games,0),hours=all.reduce((n,t)=>n+t.cpu_hours,0);
@@ -1013,7 +1029,7 @@ async function loadTrophy(){
   const headline=n
     ?`<span class="big g">${n} patch${n===1?"":"es"} in Stockfish</span><span class="sub">you helped test ${n===1?"it":"them"} with ${Math.round(m.cpu_hours)} CPU-hours</span>`
     :`<span class="big">${tests} tests helped</span><span class="sub">no merges yet</span>`;
-  // 取り込まれたものはコミット（＝パッチ）単位にまとめる。1 つのパッチは STC と LTC の 2 つのテストを持つことが多い
+  // Group merged tests by commit (= patch): one patch often has two tests, STC and LTC
   const patches=new Map();
   for(const t of (d.tests||[]).filter(t=>t.outcome==="merged")){
     const key=t.commit?.sha||t.run;
@@ -1037,8 +1053,9 @@ async function loadTrophy(){
       :k==="not merged"&&after("failed")?`${after("failed")} passed, then failed a longer TC · `
       :k==="running"&&after("running")?`${after("running")} passed, now in a longer TC · `
       :k==="waiting"?`${waiting.filter(w=>w.pr).length} with a PR · ${waiting.filter(w=>!w.pr).length} without · `:"";
-    return `<div class="tile">
-      <div class="lbl"><i style="background:${color}"></i>${label}</div>
+    const has=k!=="not merged";  // every tile but the long "not merged" one opens its list below
+    return `<div class="tile${has?" click":""}${trophyOpen===k?" on":""}"${has?` data-list="${k}" title="Show the list"`:""}>
+      <div class="lbl"><i style="background:${color}"></i>${label}${has?`<span class="caret">${trophyOpen===k?"▴":"▾"}</span>`:""}</div>
       <b>${big}</b>
       <div class="sub">${extra}${num(T[k].games)} games · ${num(Math.round(T[k].cpu_hours))} CPU-h</div></div>`;
   }).join("");
@@ -1058,18 +1075,33 @@ async function loadTrophy(){
     return `<div class="mrow wrow">⏳ <code>${esc(w.branch)}</code> ${pr}
       <span class="sub">by ${esc(w.author||"?")} · you played ${esc(kinds)}: ${num(w.games)} games, ${num(Math.round(w.hours))} CPU-h</span></div>`;
   }).join("");
+  const orow=(t,icon)=>`<div class="mrow orow">${icon} <code>${esc(t.branch)}</code>
+      <span class="sub">by ${esc(t.author||"?")} · ${esc(tcName(t.tc))}${t.next?.state?` · longer TC ${esc(t.next.state)}`:""}${t.note?" · "+esc(t.note.slice(0,90)):""}</span></div>`;
+  const lists={merged, waiting:wrows,
+    running:(d.tests||[]).filter(t=>t.outcome==="running").map(t=>orow(t,"⏱")).join(""),
+    passed:(d.tests||[]).filter(t=>t.outcome==="passed").map(t=>orow(t,"✓")).join("")};
   const el=document.getElementById("trophy"),wasOpen=document.getElementById("exp-trophy")?.classList.contains("open");
   el.innerHTML=`<h2>Your contribution${since?` · since ${esc(since)}`:""}<button class="q" data-k="trophy">?</button></h2>
     <div class="exp${wasOpen?" open":""}" id="exp-trophy">${EXP.trophy}</div>
     <div class="head"><span class="cup">🏆</span>${headline}</div>
     <div class="tiles">${tiles}</div>
-    ${wrows?`<div class="merged">${wrows}</div>`:""}
+    ${trophyOpen&&lists[trophyOpen]?`<div class="merged">${lists[trophyOpen]}</div>`:""}
     ${(d.patch_elo||[]).length?`<div class="elo" id="eloChart"></div>`:""}
-    ${merged?`<div class="merged">${merged}</div>`:""}
     <div class="sub" style="margin-top:12px">Total: ${tests} tests · ${num(games)} games · ${num(Math.round(hours))} CPU-hours donated</div>`;
   el.style.display="block";
+  TROPHY=d;
   ELO=d.patch_elo||[];drawElo();
 }
+// The tiles work as tabs: click one to open its list under the tiles, click again to close it
+let trophyOpen=null,TROPHY=null;
+try{trophyOpen=localStorage.getItem("trophyOpen")||null}catch{}
+document.getElementById("trophy").addEventListener("click",e=>{
+  const k=e.target.closest(".tile.click")?.dataset.list;
+  if(!k)return;
+  trophyOpen=trophyOpen===k?null:k;
+  try{trophyOpen?localStorage.setItem("trophyOpen",trophyOpen):localStorage.removeItem("trophyOpen")}catch{}
+  loadTrophy();
+});
 loadTrophy();setInterval(loadTrophy,10*60*1000);
 
 /* ---- Elo chart: what the merged patches you helped test added, per patch and as a running total ----
@@ -1240,8 +1272,8 @@ $("refreshFiles").addEventListener("click",loadFileList);
 
 
 # ---------------------------------------------------------------------------
-# 実況（/tv 用）：開発者のメモを Fishtest から取り、対局の山場をローカルの Ollama に渡して
-# サッカー実況風の台本を作る。台本は手数（ply）に紐づいた短いセリフの並び。
+# Commentary (for /tv): take the developer's note from Fishtest, hand the game's key moments to a local Ollama
+# and get a football-style script back: a list of short lines, each tied to a ply.
 # ---------------------------------------------------------------------------
 FISHTEST = "https://tests.stockfishchess.org"
 OLLAMA = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
@@ -1249,17 +1281,17 @@ NARRATOR_MODEL = os.environ.get("NARRATOR_MODEL", "qwen3:8b")
 RUN_ID = re.compile(r"^[0-9a-f]{24}$")
 PGN_RUN = re.compile(r"^results-([0-9a-f]{24})-\d+\.pgn$")
 RUN_TTL_S = 600
-MOMENT_GAP = 12  # セリフ同士の最低間隔（手数）。読み上げが重ならないように
+MOMENT_GAP = 12  # minimum plies between lines, so the speech never overlaps
 MAX_LINES = 8
 
-_run_cache = {}  # run -> (取得時刻, 情報)
+_run_cache = {}  # run -> (fetched at, info)
 _run_lock = threading.Lock()
-_script_cache = {}  # 対局キー -> 台本
+_script_cache = {}  # game key -> script
 _script_lock = threading.Lock()
 
 
 def run_info(run):
-    """Fishtest の公開 API から、ブランチ名・開発者のメモ・全体の戦績を取る（10分キャッシュ）。"""
+    """Branch name, developer's note and overall results from Fishtest's public API (cached 10 minutes)."""
     if not RUN_ID.match(run or ""):
         return None
     with _run_lock:
@@ -1311,7 +1343,7 @@ SAN_TOKEN = re.compile(r"(?<![\w-])(?:O-O(?:-O)?[+#]?|[KQRBN][a-h]?[1-8]?x?[a-h]
 
 
 def san_to_words(san):
-    """読み上げ用に指し手を言葉にする（Qxd2+ -> queen takes on d2, check）。"""
+    """A move in words for the speech (Qxd2+ -> queen takes on d2, check)."""
     tail = ", checkmate" if san.endswith("#") else ", check" if san.endswith("+") else ""
     core = san.rstrip("+#")
     if core.startswith("O-O-O"):
@@ -1329,7 +1361,7 @@ def san_to_words(san):
 
 
 def situation(ev):
-    """パッチ側から見た評価値（ポーン単位）を言葉に。"""
+    """The evaluation from the patch's side (in pawns), in words."""
     if ev is None:
         return "unclear"
     if ev >= 3:
@@ -1351,7 +1383,7 @@ BRIEF_MODEL = os.environ.get("BRIEF_MODEL", NARRATOR_MODEL)
 BRIEF_DIR = os.path.join(HERE, "tv-cache")
 DIFF_MAX = 30_000
 _brief_cache = {}
-_brief_lock = threading.Lock()  # 同じテストの説明を二重に作らないよう、生成は一つずつ
+_brief_lock = threading.Lock()  # one at a time, so the same test's report is never generated twice
 
 GLOSSARY = """Stockfish glossary (use only what is relevant):
 - Search: Stockfish looks ahead through a tree of possible moves. It cannot look at everything, so it tries promising moves first, searches unpromising ones less deeply (reductions) or skips them (pruning).
@@ -1362,8 +1394,8 @@ GLOSSARY = """Stockfish glossary (use only what is relevant):
 - NNUE: the neural network that evaluates positions. Tuning: adjusting numeric parameters."""
 
 
-# 境界 [-1.75, 0.25] は「弱くならないこと」を確かめる非退行テスト。コードを消す単純化に限らず、
-# 新しいネットの確認や速度だけの変更にも使われるので、「コードを消す」とは言わない
+# Bounds [-1.75, 0.25] are a non-regression test: it only checks the patch isn't weaker. It's used for
+# simplifications but also new nets and speed-ups, so never describe it as "removing code"
 STAKES = {
     "simplification": "Success means this change does NOT make Stockfish weaker. It only has to hold its ground, not gain.",
     "gainer": "Success means proving this change makes Stockfish stronger.",
@@ -1372,7 +1404,7 @@ STAKES = {
 
 
 def test_kind(info):
-    """SPRT の境界から、何をもって成功とするかを決める（ここはモデルに任せない）。"""
+    """What counts as success, decided from the SPRT bounds (never left to the model)."""
     elo0, elo1 = (info or {}).get("elo0"), (info or {}).get("elo1")
     if elo0 is not None and elo1 is not None and elo0 < 0 and elo1 <= 0.5:
         return "simplification", STAKES["simplification"]
@@ -1382,7 +1414,7 @@ def test_kind(info):
 
 
 def fetch_diff(info):
-    """テスト対象のブランチと master の差分を GitHub から取る（GitHub 以外・取得失敗は None）。"""
+    """The tested branch's diff against master, from GitHub (None if not on GitHub or the fetch fails)."""
     repo, new, base = (info or {}).get("repo") or "", (info or {}).get("new_sha"), (info or {}).get("base_sha")
     if not repo.startswith("https://github.com/") or not new or not base:
         return None
@@ -1405,7 +1437,7 @@ def _clean(value, limit):
 
 
 def briefing(run):
-    """テスト1本ぶんのスカウティングレポート。ディスクに保存し、同じテストは二度作らない。"""
+    """One test's scouting report. Saved to disk; never generated twice for the same test."""
     if not RUN_ID.match(run or ""):
         return None
     if run in _brief_cache:
@@ -1417,7 +1449,7 @@ def briefing(run):
         try:
             with open(path, encoding="utf-8") as f:
                 brief = json.load(f)
-                # 保存済みのレポートも、成功条件の文言は今の定義で上書きする（実況の台本に使われる）
+                # Even for a saved report, rewrite the success wording with the current definition (the commentary uses it)
                 brief["stakes"] = STAKES.get(brief.get("kind"), brief.get("stakes"))
                 _brief_cache[run] = brief
                 return brief
@@ -1447,7 +1479,7 @@ def briefing(run):
             with urllib.request.urlopen(req, timeout=90) as r:
                 raw = json.loads(json.load(r)["message"]["content"])
         except (OSError, ValueError, KeyError):
-            return None  # 失敗は保存しない（次の呼び出しでやり直す）
+            return None  # failures aren't saved (the next call retries)
         brief = {
             "run": run, "branch": info.get("branch"), "author": info.get("author"), "note": info.get("note"),
             "kind": kind, "stakes": stakes,
@@ -1466,12 +1498,12 @@ def briefing(run):
 
 
 def key_moments(game, patch_white):
-    """台本を付ける手：開始、評価値が大きく動いた手（間隔を空けて最大5つ）、最後の手。"""
+    """Plies that get a line: the start, the biggest evaluation swings (up to 5, spaced out), and the last move."""
     evals, sans = game.get("evals") or [], game.get("sans") or []
     n = len(sans)
     if n == 0:
         return []
-    sign = 1 if patch_white else -1  # 評価値をパッチ側から見た値にそろえる
+    sign = 1 if patch_white else -1  # make every evaluation relative to the patch's side
     swings = []
     prev = evals[0] if evals and evals[0] is not None else 0.0
     for i in range(1, min(n, len(evals))):
@@ -1578,7 +1610,7 @@ SCRIPT_SCHEMA = {
 
 
 def commentary(file, game):
-    """対局1局ぶんの実況台本を返す。同じ対局は2回目からキャッシュ。"""
+    """The commentary script for one game. Cached after the first time."""
     m = PGN_RUN.match(file or "")
     sans = game.get("sans") if isinstance(game, dict) else None
     if not m or not isinstance(sans, list) or not sans:
@@ -1612,7 +1644,7 @@ def commentary(file, game):
         raw = json.loads(content).get("lines", [])
     except (OSError, ValueError, KeyError) as e:
         return {"error": f"ollama: {e}"}
-    # モデルの返答を検証：決めた手にだけセリフを付け、長すぎる文は切る
+    # Validate the model's answer: lines only on the chosen plies, overlong sentences cut
     allowed = {mo["ply"] for mo in moments}
     lines = []
     for item in raw:
@@ -1625,7 +1657,7 @@ def commentary(file, game):
         if ply in allowed and text and ply not in {x["ply"] for x in lines}:
             lines.append({"ply": ply, "text": text[:280]})
     lines.sort(key=lambda x: x["ply"])
-    # 最後のセリフで結果がはっきり言われていなければ、決まった「試合終了」の一言を足す（ここだけはモデル任せにしない）
+    # If the last line doesn't state the result clearly, add a fixed full-time line (this part is never left to the model)
     last_ply = len(sans) - 1
     result = game.get("result")
     if result == "1/2-1/2":
@@ -1651,17 +1683,17 @@ def commentary(file, game):
 
 
 # ---------------------------------------------------------------------------
-# 貢献の集計：この PC が担当したテストのうち、Stockfish 本体に取り込まれたもの。
-# - どのテストを担当したか：ワーカーのログ（約2週間で上書きされる）→ tv-cache/ledger.json に恒久保存
-# - どれだけ担当したか：Fishtest の get_task（この PC の担当分の対局数）
-# - CPU 時間：Fishtest と同じ式（推定対局時間 × 対局数 × スレッド数 ÷ 3600）
-# - 取り込まれたか：Stockfish の master のコミットメッセージに、そのテストの URL が載っているか
+# Contribution: which of the tests this PC played made it into Stockfish.
+# - which tests: from the worker's logs (overwritten after about two weeks), kept for good in tv-cache/ledger.json
+# - how much: Fishtest's get_task (this PC's share of the games)
+# - CPU time: Fishtest's own formula (estimated game length x games x threads / 3600)
+# - merged: whether a Stockfish master commit message links the test (or its PR does, see merged_runs)
 # ---------------------------------------------------------------------------
 CACHE = os.path.join(HERE, "tv-cache")
 LEDGER = os.path.join(CACHE, "ledger.json")
 SF_GIT = os.path.join(CACHE, "stockfish.git")
 SF_REPO = "https://github.com/official-stockfish/Stockfish.git"
-SF_FETCH_EVERY_S = 24 * 3600  # 1日1回。マージは数日おきにまとめて入るので十分。履歴は消えないので、間隔を空けても取りこぼさない（遅れるだけ）
+SF_FETCH_EVERY_S = 24 * 3600  # once a day: merges land in batches every few days, and history is never lost, only seen a little later
 RE_TASK_OLD = re.compile(r"Working on task (\d+) from \S+/tests/view/([0-9a-f]{24})")
 RE_RUN_LINE = re.compile(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\S* : run: ([0-9a-f]{24}) task: (\d+)")
 _impact_lock = threading.Lock()
@@ -1669,7 +1701,7 @@ _merged = {"at": 0.0, "runs": {}}
 
 
 def estimate_game_duration(tc):
-    """Fishtest の server/fishtest/util.py と同じ推定（1局あたりの秒数）。"""
+    """The same estimate as Fishtest's server/fishtest/util.py (seconds per game)."""
     scale, game_moves = 2 * 0.92, 68
     chunks = tc.split("+")
     increment = float(chunks[1]) if len(chunks) == 2 else 0.0
@@ -1699,7 +1731,7 @@ def _write_json(path, value):
 
 
 def update_ledger():
-    """ログに出てきた (テスト, タスク) を台帳に足す。ログが上書きされても台帳には残る。"""
+    """Add every (test, task) seen in the logs to the ledger, which outlives the logs."""
     ledger = _read_json(LEDGER, {})
     changed = False
     for name in ("api.log.previous", "api.log"):
@@ -1712,22 +1744,19 @@ def update_ledger():
             if task not in entry["tasks"]:
                 entry["tasks"].append(task)
                 changed = True
-    try:
-        with open(TXT_LOG, encoding="utf-8", errors="replace") as f:
-            for task, run in RE_TASK_OLD.findall(f.read()):
-                entry = ledger.setdefault(run, {"tasks": [], "first_seen": None})
-                if int(task) not in entry["tasks"]:
-                    entry["tasks"].append(int(task))
-                    changed = True
-    except OSError:
-        pass
+    # log.txt is now the worker's whole output and grows for days: read only its tail
+    for task, run in RE_TASK_OLD.findall("\n".join(tail_lines(TXT_LOG, max_bytes=5_000_000))):
+        entry = ledger.setdefault(run, {"tasks": [], "first_seen": None})
+        if int(task) not in entry["tasks"]:
+            entry["tasks"].append(int(task))
+            changed = True
     if changed:
         _write_json(LEDGER, ledger)
     return ledger
 
 
 def my_task(run, task, username):
-    """この PC が担当したタスクの記録。終わったタスクは変わらないのでディスクに保存して二度と取りに行かない。"""
+    """This PC's record for one task. Finished tasks never change, so they're saved to disk and never fetched again."""
     path = os.path.join(CACHE, "tasks", f"{run}-{task}.json")
     cached = _read_json(path, None)
     if cached is not None:
@@ -1749,7 +1778,7 @@ def my_task(run, task, username):
 
 
 def merged_runs():
-    """Stockfish master のコミットメッセージに載っているテスト ID → コミット。6時間ごとに取り直す。"""
+    """Test ID -> Stockfish master commit, from commit messages and their PRs. Refreshed daily."""
     if time.time() - _merged["at"] < SF_FETCH_EVERY_S and _merged["runs"]:
         return _merged["runs"]
     try:
@@ -1763,7 +1792,7 @@ def merged_runs():
                              check=True, timeout=120, capture_output=True).stdout.decode("utf-8", errors="replace")
     except (OSError, subprocess.SubprocessError):
         return _merged["runs"]
-    runs = {}
+    runs, by_pr = {}, {}
     for record in out.split("\x1e"):
         fields = record.strip().split("\x1f")
         if len(fields) < 4:
@@ -1774,12 +1803,197 @@ def merged_runs():
         commit = {"sha": sha, "date": date, "subject": subject, "runs": ids}
         for run in ids:
             runs.setdefault(run, commit)
-    _merged.update(at=time.time(), runs=runs)
+        for pr in re.findall(r"github\.com/official-stockfish/Stockfish/pull/(\d+)", body):
+            by_pr.setdefault(int(pr), commit)
+    # Some commits don't link their tests (e.g. "Avoid stack checks", 6 Nov 2026), but every one ends with
+    # "closes .../pull/N". The closed PR gives its test links and its branch, which is the Fishtest branch.
+    by_branch = {}
+    for number, pr in closed_prs().items():
+        commit = by_pr.get(number)
+        if not commit:
+            continue  # closed without merging
+        for run in pr["runs"]:
+            if run not in runs:
+                runs[run] = commit
+                commit["runs"].append(run)
+        by_branch.setdefault(pr["ref"].lower(), commit)
+    _merged.update(at=time.time(), runs=runs, by_branch=by_branch)
     return runs
 
 
+def closed_prs():
+    """Recently closed Stockfish PRs -> {number: {"ref", "runs"}}. One GitHub request, made with the daily fetch."""
+    try:
+        req = urllib.request.Request(
+            "https://api.github.com/repos/official-stockfish/Stockfish/pulls?state=closed&sort=updated&direction=desc&per_page=100",
+            headers={"User-Agent": "fishtest-tv", "Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            pulls = json.load(r)
+    except (OSError, ValueError) as e:
+        print(f"closed PRs: {e}")
+        return {}
+    return {p["number"]: {"ref": (p.get("head") or {}).get("ref") or "",
+                          "runs": re.findall(r"tests/view/([0-9a-f]{24})", p.get("body") or "")}
+            for p in pulls}
+
+
+def merged_by_branch(branch):
+    """A merged commit whose PR was opened from this Fishtest branch name, for tests the commit doesn't link.
+    Only fairly specific names count: "master", "v" or "test" would match unrelated PRs."""
+    b = (branch or "").lower()
+    if len(b) < 6 or b == "master":
+        return None
+    return _merged.get("by_branch", {}).get(b)
+
+
+# Net explorer (/net): the current NNUE architecture read from Stockfish master, the history of the
+# default net, and the latest recipe experiments on vondele/nettest (where new nets are trained).
+NET_INFO_EVERY_S = 3600
+_net_info = {"at": 0.0, "data": None}
+_net_lock = threading.Lock()
+
+
+def _sf_file(path):
+    try:
+        out = subprocess.run(["git", "--git-dir", SF_GIT, "show", f"master:{path}"], capture_output=True,
+                             timeout=60, check=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return out.stdout.decode("utf-8", errors="replace")
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _const(src, name, default):
+    m = re.search(rf"\b{name}\s*=\s*(\d+)", src)
+    return int(m.group(1)) if m else default
+
+
+def _net_history(limit=12):
+    """Commits that changed the default net, newest first, each with the Elo of its LTC test if it has one."""
+    try:
+        out = subprocess.run(["git", "--git-dir", SF_GIT, "log", "master", f"-{limit}", "-G", "EvalFileDefaultName",
+                              "--format=%H%x1f%cs%x1f%an%x1f%s%x1f%B%x1e", "--", "src/evaluate.h"],
+                             capture_output=True, timeout=120, check=True,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout.decode("utf-8", "replace")
+    except (OSError, subprocess.SubprocessError):
+        return []
+    nets = []
+    for record in out.split("\x1e"):
+        fields = record.strip().split("\x1f")
+        if len(fields) < 5:
+            continue
+        sha, date, author, subject, body = fields
+        net = re.search(r"nn-[0-9a-f]{12}\.nnue", subject + body)
+        elo = None
+        for run in dict.fromkeys(re.findall(r"tests/view/([0-9a-f]{24})", body)):
+            e = run_elo(run)
+            if e and e["tc"] in LONG_TCS:
+                elo = {k: e[k] for k in ("elo", "lo", "hi", "tc", "run")}
+                break
+        nettest = re.search(r"github\.com/vondele/nettest/pull/(\d+)", body)
+        nets.append({"sha": sha, "date": date, "author": author, "subject": subject,
+                     "net": net.group(0) if net else None, "elo": elo,
+                     "nettest": int(nettest.group(1)) if nettest else None})
+    return nets
+
+
+def _nettest_prs():
+    try:
+        req = urllib.request.Request("https://api.github.com/repos/vondele/nettest/pulls?state=all&per_page=40",
+                                     headers={"User-Agent": "fishtest-tv", "Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            pulls = json.load(r)
+    except (OSError, ValueError) as e:
+        print(f"nettest PRs: {e}")
+        return None
+    return [{"number": p["number"], "title": p["title"], "author": (p.get("user") or {}).get("login"),
+             "state": "merged" if p.get("merged_at") else p["state"], "opened": (p.get("created_at") or "")[:10],
+             "url": p["html_url"]} for p in pulls]
+
+
+def net_info():
+    with _net_lock:
+        if _net_info["data"] and time.time() - _net_info["at"] < NET_INFO_EVERY_S:
+            return _net_info["data"]
+        merged_runs()  # keeps the local Stockfish clone fresh (daily)
+        arch = _sf_file("src/nnue/nnue_architecture.h")
+        k32 = _sf_file("src/nnue/features/k32h3.h")
+        threats = _sf_file("src/nnue/features/full_threats.h")
+        pp = _sf_file("src/nnue/features/pp_3wide.h")
+        net = re.search(r'EvalFileDefaultName\s+"([^"]+)"', _sf_file("src/evaluate.h"))
+        psq = re.search(r"Number of feature dimensions \(([\d,]+)", k32)
+        pawn_ids = re.search(r"PawnIds\s*=\s*COLOR_NB\s*\*\s*(\d+)", pp)
+        pids = 2 * int(pawn_ids.group(1)) if pawn_ids else 96
+        prs = _nettest_prs()
+        stored = None  # how many distinct layer stacks the file really stores (combinations can share one)
+        try:
+            with open(os.path.join(TESTING, net.group(1)), "rb") as f:
+                desc_len = struct.unpack("<III", f.read(12))[2]
+                f.seek(desc_len + 8, 1)
+                stored = struct.unpack("<I", f.read(4))[0]
+        except (OSError, AttributeError, struct.error):
+            pass
+        data = {
+            "stored_stacks": stored,
+            "net": net.group(1) if net else None,
+            "l1": _const(arch, "L1", 1024), "l2": _const(arch, "L2", 32), "l3": _const(arch, "L3", 32),
+            "stacks": _const(arch, "RawLayerStacks", 192),
+            "dims": {"psq": int(psq.group(1).replace(",", "")) if psq else 67584,
+                     "threats": _const(threats, "Dimensions", 59808),
+                     "pairs": pids * (pids - 1) // 2},
+            "history": _net_history(),
+            "nettest": prs if prs is not None else ((_net_info["data"] or {}).get("nettest") or []),
+            "checked": datetime.now().isoformat(timespec="minutes"),
+        }
+        _net_info.update(at=time.time(), data=data)
+        return data
+
+
+NNUE_VERSION = 0x6A448AFA
+SLOTS = 11  # K32H3 piece slots: our/their pawn, knight, bishop, rook, queen (interleaved), then both kings
+
+
+def net_weights(king, block):
+    """Piece-square weights of the master net for one king square and material block: 704 inputs
+    (11 piece slots x 64 squares) x L1 neurons of int8, in file order (input-major).
+
+    File layout (src/nnue/network.cpp, nnue_feature_transformer.h): header (version, hash, description),
+    layer-stack table (3 u32 + RawLayerStacks u16), feature transformer hash, i16 biases[L1],
+    i8 threat weights, i8 pawn-pair weights, i8 piece-square weights[inputs][L1], then the layer stacks."""
+    info = net_info()
+    name = info.get("net")
+    path = os.path.join(TESTING, name) if name else None
+    if not path or not os.path.exists(path):
+        return {"error": f"{name or 'the master net'} isn't downloaded on this PC yet (the worker fetches nets as tests need them)"}
+    m = re.fullmatch(r"([a-h])([1-8])", (king or "g1").lower())
+    if not m:
+        return {"error": "king must be a square like g1"}
+    file, rank = "abcdefgh".index(m.group(1)), int(m.group(2)) - 1
+    file = file if file >= 4 else 7 - file  # inputs are mirrored so the king is always on files e-h
+    bucket = (7 - rank) * 4 + (7 - file)
+    block = max(0, min(2, int(block)))
+    L1, dims = info["l1"], info["dims"]
+    with open(path, "rb") as f:
+        version, _, desc_len = struct.unpack("<III", f.read(12))
+        if version != NNUE_VERSION:
+            return {"error": f"unknown net format 0x{version:08X}"}
+        f.seek(desc_len, 1)
+        f.read(8)  # layer-stack table hash, raw stack count
+        f.seek(4 + 2 * info["stacks"], 1)  # stored stack count, fallback table
+        f.read(4)  # feature transformer hash
+        biases = f.read(2 * L1)
+        psq_start = f.tell() + (dims["threats"] + dims["pairs"]) * L1
+        start = psq_start + (block * 32 * SLOTS * 64 + bucket * SLOTS * 64) * L1
+        if start + SLOTS * 64 * L1 > os.path.getsize(path):
+            return {"error": "the net file is shorter than this architecture needs"}
+        f.seek(start)
+        data = f.read(SLOTS * 64 * L1)
+    king_sq = "abcdefgh"[file] + str(rank + 1)
+    return {"net": name, "king": king_sq, "bucket": bucket, "block": block, "l1": L1, "slots": SLOTS,
+            "biases": base64.b64encode(biases).decode(), "weights": base64.b64encode(data).decode()}
+
+
 def run_status(run):
-    """テストの結果。終わったテストは変わらないのでディスクに保存する。"""
+    """A test's result. Finished tests never change, so they're saved to disk."""
     path = os.path.join(CACHE, "runs", f"{run}.json")
     cached = _read_json(path, None)
     if cached is not None:
@@ -1970,7 +2184,7 @@ def find_pr(t, prs):
 
 
 def impact():
-    """担当したテストを「取り込まれた / 合格して取り込み待ち / 不合格 / 実行中」に分け、対局数と CPU 時間を合計する。"""
+    """Sort this PC's tests into merged / waiting / running / other passes / not merged, with games and CPU time per group."""
     with _impact_lock:
         username = read_cfg().get("username")
         ledger = update_ledger()
@@ -1986,7 +2200,10 @@ def impact():
                 if t and t["mine"]:
                     games += t["games"]
             hours = games * estimate_game_duration(status["tc"]) * int(status.get("threads") or 1) / 3600
-            if run in merged:
+            commit = merged.get(run)
+            if not commit and status["finished"] and status["is_green"]:
+                commit = merged_by_branch(status["branch"])  # only a pass can have been merged
+            if commit:
                 outcome = "merged"
             elif not status["finished"]:
                 outcome = "running"
@@ -1997,7 +2214,7 @@ def impact():
             tests.append({
                 "run": run, "branch": status["branch"], "author": status["author"], "note": status["note"],
                 "tc": status["tc"], "outcome": outcome, "games": games, "cpu_hours": round(hours, 2),
-                "first_seen": entry.get("first_seen"), "commit": merged.get(run),
+                "first_seen": entry.get("first_seen"), "commit": commit,
             })
         tests.sort(key=lambda x: x["first_seen"] or "", reverse=True)
         # An STC pass whose LTC failed didn't make it; one whose LTC is still running is undecided
@@ -2068,9 +2285,9 @@ def impact_fast():
     return _impact_snapshot["data"]
 
 
-# ---- スマホのリモコン（/remote） ----
-# モニターは LAN にも開くので、127.0.0.1 以外からの接続は PIN でログインしたクッキーが無いと何も見せない。
-# 操作は start-fishtest.ps1 に任せる（端末の `fishtest stop` 等と同じ動きになる）
+# ---- Phone remote (/remote) ----
+# The monitor listens on the LAN, so connections not from 127.0.0.1 see nothing without a PIN-login cookie.
+# Actions run start-fishtest.ps1, so they behave exactly like `fishtest stop` etc. in a terminal
 REMOTE_PIN_FILE = os.path.join(CACHE, "remote-pin.txt")
 REMOTE_LOG = os.path.join(CACHE, "remote-actions.log")
 PS1 = os.path.join(HERE, "start-fishtest.ps1")
@@ -2078,13 +2295,13 @@ LOCAL_CLIENTS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
 REMOTE_COOKIE = "fishtest_remote"
 REMOTE_ACTIONS = {"start": "worker", "stop": "stop", "tv-on": "tv", "tv-off": "tvoff"}
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-# PIN を外し続けたら 10 分締め出す（6 桁を総当たりされないように）
+# Lock logins for 10 minutes after repeated wrong PINs, so 6 digits can't be brute-forced
 PIN_TRIES = 5
 PIN_LOCK_S = 600
 
 
 def remote_pin():
-    """6 桁の PIN。初回に作って tv-cache に残す（消せば次の起動で作り直し、全端末がログアウトする）。"""
+    """The 6-digit PIN, created on first start in tv-cache (delete it to get a new one at the next start; every device is logged out)."""
     try:
         with open(REMOTE_PIN_FILE, encoding="utf-8") as f:
             pin = f.readline().strip()
@@ -2100,7 +2317,7 @@ def remote_pin():
 
 
 REMOTE_PIN = remote_pin()
-# クッキーの値は PIN から作る。モニターを再起動してもログインが続き、PIN を変えれば無効になる
+# The cookie is derived from the PIN: logins survive a monitor restart and end when the PIN changes
 REMOTE_TOKEN = hashlib.sha256(f"fishtest-remote:{REMOTE_PIN}".encode()).hexdigest()
 _pin_lock = threading.Lock()
 _pin_fails = {"n": 0, "until": 0.0}
@@ -2126,7 +2343,7 @@ _proc_cache = {"t": 0.0, "v": {"worker": False, "tv": False}}
 
 
 def remote_processes(fresh=False):
-    """ワーカー（python3 worker.py）と TV（専用プロファイルの Edge）が動いているか。CIM は 1 秒ほどかかるので 3 秒キャッシュ。"""
+    """Whether the worker (python3 worker.py) and the TV (Edge with its own profile) are running. CIM takes about a second, so cached for 3."""
     with _proc_lock:
         if not fresh and time.time() - _proc_cache["t"] < 3:
             return _proc_cache["v"]
@@ -2169,7 +2386,7 @@ def remote_status():
 
 
 def remote_action(action):
-    """start-fishtest.ps1 を裏で動かす。止める（stop）はワーカーが次の報告で終わるまで数分かかるので待たない。"""
+    """Run start-fishtest.ps1 in the background. Doesn't wait for "stop": the worker only ends at its next report, minutes later."""
     mode = REMOTE_ACTIONS.get(action)
     if mode is None:
         return False
@@ -2182,11 +2399,76 @@ def remote_action(action):
                      creationflags=NO_WINDOW)
     log.close()
     with _proc_lock:
-        _proc_cache["t"] = 0.0  # 次の状態取得で取り直す
+        _proc_cache["t"] = 0.0  # re-read on the next status request
     return True
 
 
-REMOTE_PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+# Watchdog. Twice (2 and 8 Nov 2026) the worker froze for hours: alive and holding its lock, so nothing
+# restarted it, but idle with no network connection, its finished games never reported. When the worker
+# is alive and api.log has been silent this long, kill it and start a fresh one. Normal quiet spells are
+# shorter: request retries back off to 15 minutes at most, and building Stockfish takes a few minutes.
+STUCK_AFTER_S = 30 * 60
+WATCH_EVERY_S = 60
+RESTART_GAP_S = 60 * 60  # at most one restart an hour, so a restart that doesn't help can't loop
+WATCHDOG_LOG = os.path.join(CACHE, "watchdog.log")
+_watch = {"stuck": False, "since": None, "last_restart": 0.0, "note": "", "tick": time.time(), "awake": time.time()}
+
+
+def _watch_log(msg):
+    os.makedirs(CACHE, exist_ok=True)
+    with open(WATCHDOG_LOG, "a", encoding="utf-8") as f:
+        f.write(f"{datetime.now().isoformat(timespec='seconds')} {msg}\n")
+    print(f"watchdog: {msg}")
+
+
+def _restart_worker(pid):
+    r = subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, text=True,
+                       timeout=30, creationflags=NO_WINDOW)
+    if r.returncode != 0:
+        # A worker started from an admin shell can't be stopped from here
+        _watch["note"] = "can't restart it: " + (r.stderr or r.stdout).strip().splitlines()[-1][:160]
+        _watch_log(f"taskkill {pid} failed: {(r.stderr or r.stdout).strip()}")
+        return
+    time.sleep(5)  # let it go: the lock file is freed once the process is gone
+    remote_action("start")
+    _watch["note"] = "restarted it automatically"
+    _watch_log(f"killed stuck worker {pid} and started a new one")
+
+
+def check_stuck(now):
+    pid = worker_pid()
+    try:
+        quiet_since = max(os.path.getmtime(API_LOG), _watch["awake"], _watch["last_restart"])
+    except OSError:
+        quiet_since = _watch["awake"]
+    alive = bool(pid) and remote_processes(fresh=True)["worker"] and not os.path.exists(FISH_EXIT)
+    stuck = alive and now - quiet_since > STUCK_AFTER_S
+    if stuck and not _watch["stuck"]:
+        _watch.update(since=quiet_since, note="")
+        _watch_log(f"worker {pid} alive but silent since {datetime.fromtimestamp(quiet_since).isoformat(timespec='seconds')}")
+    _watch["stuck"] = stuck
+    if not stuck:
+        _watch.update(since=None, note="" if alive else _watch["note"])
+        return
+    if now - _watch["last_restart"] > RESTART_GAP_S:
+        _watch["last_restart"] = now
+        _restart_worker(pid)
+
+
+def watchdog():
+    while True:
+        time.sleep(WATCH_EVERY_S)
+        now = time.time()
+        if now - _watch["tick"] > 5 * WATCH_EVERY_S:
+            _watch["awake"] = now  # the PC was asleep: the worker gets a full window to catch up
+        _watch["tick"] = now
+        try:
+            check_stuck(now)
+        except Exception as e:  # never let the watchdog die
+            print(f"watchdog: {e}")
+
+
+REMOTE_PAGE =r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0a0e0d">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -2331,7 +2613,7 @@ async function act(action, confirmText) {
     if (r.status === 401) { showLogin(true); return }
     if (!r.ok) throw new Error(r.status)
   } catch (e) { $("appErr").textContent = "That didn't go through. Try again." }
-  // 起動・停止が反映されるまで少し速めに確かめる
+  // check a little faster until a start or stop shows up
   for (let i = 0; i < 8; i++) { await new Promise(res => setTimeout(res, 1500)); await refresh() }
   busy = false; render()
 }
@@ -2362,11 +2644,11 @@ setInterval(() => {
 setInterval(() => { if (!document.hidden && !busy && $("login").style.display !== "block") refresh() }, 4000)
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh() })
 refresh()
-// ホーム画面のアプリとして入れられるようにする（HTTPS か localhost のときだけ登録できる）
+// Make it installable as a home-screen app (registration only works over HTTPS or on localhost)
 if ("serviceWorker" in navigator && window.isSecureContext) navigator.serviceWorker.register("/sw.js").catch(() => {})
 </script></body></html>"""
 
-# ---- ホーム画面アプリ（PWA）用：マニフェストと Service Worker ----
+# ---- Home-screen app (PWA): manifest and service worker ----
 STATIC = os.path.join(HERE, "static")
 MANIFEST = json.dumps({
     "name": "Fishtest Remote",
@@ -2384,7 +2666,7 @@ MANIFEST = json.dumps({
         {"src": "/static/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
     ],
 })
-# 中身はキャッシュしない（状態は常に最新を取りに行く）。PC に届かないときだけ、真っ白ではなく案内を出す
+# Nothing is cached (status is always fetched fresh); only when the PC can't be reached, show a message instead of a blank page
 SERVICE_WORKER = r"""const OFFLINE = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Fishtest Remote</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0e0d;color:#e7efe9;
 font-family:system-ui,sans-serif;text-align:center;padding:24px"><div><div style="font-size:48px">🐟</div>
@@ -2425,8 +2707,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _remote_ok(self):
-        """この PC からの接続か、PIN でログイン済みのクッキーを持っているか。"""
-        # `tailscale serve`（HTTPS）経由の接続は 127.0.0.1 から届くが、中身はスマホからなので PC 扱いしない
+        """Whether the request comes from this PC or carries a PIN-login cookie."""
+        # Requests through `tailscale serve` (HTTPS) arrive from 127.0.0.1 but really come from a phone, so they don't count as this PC
         proxied = any(self.headers.get(h) for h in ("X-Forwarded-For", "Tailscale-User-Login", "Forwarded"))
         if self.client_address[0] in LOCAL_CLIENTS and not proxied:
             return True
@@ -2439,7 +2721,7 @@ class Handler(BaseHTTPRequestHandler):
         return c is not None and hmac.compare_digest(c.value, REMOTE_TOKEN)
 
     def _host_ok(self):
-        # DNS リバインディング対策：IP アドレス・localhost・Tailscale の名前で来たものだけ受け付ける
+        # Against DNS rebinding: accept only IP addresses, localhost and Tailscale names
         host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
         return (host == "localhost" or host.endswith(".ts.net")
                 or re.fullmatch(r"[\d.]+|[0-9a-f:]+", host) is not None)
@@ -2476,7 +2758,7 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 self.send_error(404)
         elif route in FAVICONS or route == "/favicon.ico":
-            # /favicon.ico はリンクを読まない場面（ブックマーク等）向けに、モニターの SVG を返す
+            # /favicon.ico is for places that don't read the link tag (bookmarks etc.): serve the monitor's SVG
             self._send(FAVICONS.get(route, FAVICONS["/favicon.svg"]), "image/svg+xml")
         elif route == "/data":
             self._send(json.dumps(collect()), "application/json")
@@ -2504,12 +2786,24 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/impact":
             self._send(json.dumps(impact_fast()), "application/json")
         elif route == "/tv":
-            # 部屋の向こうから眺める全画面ビュー。毎回ディスクから読むので、tv.html の手直しは再読み込みだけで反映される
+            # The fullscreen view for across the room. Read from disk every time, so edits to tv.html show up on reload
             try:
                 with open(os.path.join(HERE, "tv.html"), "rb") as f:
                     self._send(f.read(), "text/html; charset=utf-8")
             except OSError:
                 self.send_error(404, "tv.html not found next to monitor.py")
+        elif route == "/net":
+            # The net explorer, read from disk like the TV
+            try:
+                with open(os.path.join(HERE, "net.html"), "rb") as f:
+                    self._send(f.read(), "text/html; charset=utf-8")
+            except OSError:
+                self.send_error(404, "net.html not found next to monitor.py")
+        elif route == "/netinfo":
+            self._send(json.dumps(net_info()), "application/json")
+        elif route == "/netweights":
+            q = parse_qs(parsed.query)
+            self._send(json.dumps(net_weights(q.get("king", ["g1"])[0], q.get("block", ["1"])[0])), "application/json")
         elif route == "/vendor/chess.js":
             try:
                 with open(os.path.join(VENDOR, "chess.js"), "rb") as f:
@@ -2531,7 +2825,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._remote_ok():
             self.send_error(401)
             return
-        # 実況台本の生成。対局データは /tv が /games から受け取ったものをそのまま送ってくる
+        # Generate a commentary script. /tv sends the game exactly as it got it from /games
         if route != "/commentary":
             self.send_error(404)
             return
@@ -2547,8 +2841,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(json.dumps(commentary(payload.get("file"), payload.get("game") or {})), "application/json")
 
     def _remote_post(self, route):
-        # 独自ヘッダーが無い POST は断る：他のサイトのページからこの PC のブラウザ経由で押されないように
-        # （独自ヘッダー付きのクロスオリジン要求はプリフライトで止まる）
+        # Refuse POSTs without the custom header, so another site can't trigger them through this PC's browser
+        # (a cross-origin request with a custom header is stopped by the CORS preflight)
         if self.headers.get("X-Fishtest") != "1":
             self.send_error(403)
             return
@@ -2588,8 +2882,9 @@ def main():
     if not os.path.exists(os.path.join(WORKER, "worker.py")):
         print(f"warning: no worker.py in {WORKER} (set FISHTEST_WORKER or --worker)")
     srv = ThreadingHTTPServer((args.host, args.port), Handler)
-    # 貢献カードの集計は起動直後だと Fishtest への問い合わせで 20 秒ほどかかるので、ページが開かれる前に裏で済ませておく
+    # Right after startup the contribution count takes ~20 s of Fishtest queries: do it in the background before a page asks
     threading.Thread(target=_refresh_impact, daemon=True).start()
+    threading.Thread(target=watchdog, daemon=True).start()
     url = f"http://{args.host}:{args.port}"
     print(f"Fishtest worker monitor -> {url}  (Ctrl+C to stop)")
     print(f"Across-the-room view    -> {url}/tv")

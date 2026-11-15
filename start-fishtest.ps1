@@ -1,22 +1,22 @@
-﻿# Fishtest のワーカー・モニター・TV をまとめて起動する。すでに動いているものは起動しない
-# （TV を2つ開くと実況が2人になるので、特に TV は重複させない）。
-#   fishtest      ワーカー + モニター + TV
-#   fishtest tv   TV だけ（モニターが止まっていれば一緒に起動）
-#   fishtest stop ワーカーを穏やかに止める（Worker Manager アプリの停止と同じく fish.exit を置く）
-#   fishtest worker ワーカーだけ（TV は開かない。スマホのリモコンから使う）
-#   fishtest tvoff  TV を閉じる
-#   fishtest remote スマホのリモコンの URL と PIN を表示する
-# Windows PowerShell 5.1 / PowerShell 7 の両方で動く。
+﻿# Start the Fishtest worker, monitor and TV together. Anything already running is left alone
+# (especially the TV: two TVs would mean two commentators talking over each other).
+#   fishtest        worker + monitor + TV
+#   fishtest tv     the TV only (starts the monitor too if it isn't running)
+#   fishtest stop   stop the worker gracefully (places fish.exit, like the Worker Manager app's stop)
+#   fishtest worker the worker and monitor only, no TV (what the phone remote uses)
+#   fishtest tvoff  close the TV
+#   fishtest remote print the phone remote's URL and PIN
+# Works in both Windows PowerShell 5.1 and PowerShell 7.
 param([ValidateSet('all', 'tv', 'stop', 'worker', 'tvoff', 'remote')][string]$Mode = 'all')
 
-# 場所の設定。環境変数で上書きできる（FISHTEST_WORKER / FISHTEST_PYTHON / MSYS2_ROOT）
-$project = $PSScriptRoot  # このリポジトリ（モニター・TV）
-$worker = if ($env:FISHTEST_WORKER) { $env:FISHTEST_WORKER } else { 'C:\fishtest\worker' }  # Fishtest ワーカー本体
+# Locations, overridable with environment variables (FISHTEST_WORKER / FISHTEST_PYTHON / MSYS2_ROOT)
+$project = $PSScriptRoot  # this repository (monitor, TV)
+$worker = if ($env:FISHTEST_WORKER) { $env:FISHTEST_WORKER } else { 'C:\fishtest\worker' }  # the Fishtest worker itself
 $msys = if ($env:MSYS2_ROOT) { $env:MSYS2_ROOT } else { 'C:\msys64' }
 $port = 8787
 $tvUrl = "http://127.0.0.1:$port/tv"
 $tvProfile = Join-Path $env:LOCALAPPDATA 'fishtest-tv-edge'
-# モニター用の Python：ストアの python.exe（WindowsApps のスタブ）は避ける
+# Python for the monitor: avoid the Microsoft Store python.exe stub in WindowsApps
 $python = $env:FISHTEST_PYTHON
 if (-not $python) {
     $python = Get-Command python -All -ErrorAction SilentlyContinue |
@@ -33,17 +33,30 @@ function Get-Running([string]$pattern, [string]$name) {
         Where-Object { $_.CommandLine -match $pattern }
 }
 
-# 停止：ワーカーは次の結果報告のときに fish.exit を見つけ、終わった対局を送ってから止まる
-# （そのとき対局中だった数局だけは失われ、残りはサーバーが他の PC に回す）。ワーカーが fish.exit を自分で消す
+# The worker's python runs under MSYS2 and its command line is often unreadable from PowerShell,
+# so Get-Running 'worker\.py' misses it. Use the worker's own lock file instead: openlock writes
+# the holder's PID to it, and we confirm that PID is still a python3 process.
+function Test-Worker {
+    $lock = Join-Path $worker 'fishtest_worker.lock'
+    $lockPid = Get-Content $lock -TotalCount 1 -ErrorAction SilentlyContinue
+    if ($lockPid -match '^\d+$') {
+        $p = Get-Process -Id ([int]$lockPid) -ErrorAction SilentlyContinue
+        if ($p -and $p.ProcessName -like 'python3*') { return $true }
+    }
+    return [bool](Get-Running 'worker\.py' 'python3%')
+}
+
+# Stop: at its next report the worker finds fish.exit, sends its finished games, then stops
+# (only the few games in progress are lost; the server hands the rest to other PCs). The worker deletes fish.exit itself
 if ($Mode -eq 'stop') {
-    if (-not (Get-Running 'worker\.py' 'python3%')) {
+    if (-not (Test-Worker)) {
         Write-Host '  worker   not running' -ForegroundColor DarkGray
         return
     }
     New-Item -Path (Join-Path $worker 'fish.exit') -ItemType File -Force | Out-Null
     Write-Host '  worker   stopping gracefully (fish.exit, same as the Worker Manager app)...' -ForegroundColor Green
-    for ($i = 0; $i -lt 300 -and (Get-Running 'worker\.py' 'python3%'); $i++) { Start-Sleep -Seconds 1 }
-    if (Get-Running 'worker\.py' 'python3%') {
+    for ($i = 0; $i -lt 300 -and (Test-Worker); $i++) { Start-Sleep -Seconds 1 }
+    if (Test-Worker) {
         Write-Host '  worker   still finishing after 5 min; it will stop at its next report' -ForegroundColor Yellow
     } else {
         Write-Host "  worker   stopped after ${i}s. Monitor and TV keep running (close them, or Alt+F4 the TV)" -ForegroundColor Green
@@ -51,7 +64,7 @@ if ($Mode -eq 'stop') {
     return
 }
 
-# TV を閉じる：専用プロファイルの Edge だけを、子プロセスごと終わらせる（普段の Edge には触れない）
+# Close the TV: end only the Edge with the TV's own profile, with its child processes (your normal Edge is untouched)
 if ($Mode -eq 'tvoff') {
     $tv = Get-Running 'fishtest-tv-edge' 'msedge.exe'
     if (-not $tv) {
@@ -63,8 +76,8 @@ if ($Mode -eq 'tvoff') {
     return
 }
 
-# モニター：LAN（スマホ）からも開けるよう全インターフェースで待ち受ける。
-# 外からの接続は PIN が要る（127.0.0.1 からは不要）。最小化したウィンドウで、閉じれば止まる
+# Monitor: listen on all interfaces so a phone on the LAN can open it.
+# Other devices need the PIN (127.0.0.1 doesn't). Runs in a minimized window; closing it stops the monitor
 function Start-Monitor {
     if (Test-Monitor) {
         Write-Host "  monitor  already running on :$port" -ForegroundColor DarkGray
@@ -74,7 +87,7 @@ function Start-Monitor {
     Write-Host "  monitor  starting on :$port (minimized window)" -ForegroundColor Green
 }
 
-# リモコン：Wi-Fi の IP と PIN を出す。PIN はモニターが初回起動時に tv-cache\remote-pin.txt に作る
+# Remote: print the Wi-Fi IP and the PIN. The monitor creates the PIN in tv-cache\remote-pin.txt on first start
 if ($Mode -eq 'remote') {
     Start-Monitor
     for ($i = 0; $i -lt 60 -and -not (Test-Monitor); $i++) { Start-Sleep -Milliseconds 500 }
@@ -90,12 +103,12 @@ if ($Mode -eq 'remote') {
     return
 }
 
-# 0. 更新：自動で更新されないものだけをここで更新する
-#    - ワーカー本体は起動時と実行中に Fishtest へ版を問い合わせ、古ければ自分で更新して再起動する
-#    - Stockfish の履歴（取り込み判定用）はモニターの起動時に取り直す
-#    - Edge・Ollama 本体はそれぞれ自動更新される
-#    - Ollama のモデル（実況・スカウティングレポート用）は自動では更新されないので、ここで pull する。
-#      最新なら 1 秒ほど。新しい版があれば数 GB 落とすことがあるので、裏で動かして TV の起動を待たせない
+# 0. Updates: only for things that don't update themselves
+#    - the worker asks Fishtest for the current version at start and while running, and updates and restarts itself
+#    - Stockfish's history (for merge detection) is refreshed when the monitor starts
+#    - Edge and Ollama update themselves
+#    - Ollama models (commentary, scouting reports) don't update themselves, so pull them here.
+#      About a second when up to date; a new version can be several GB, so it runs in the background and never delays the TV
 $models = @($env:NARRATOR_MODEL, $env:BRIEF_MODEL, 'qwen3:8b') | Where-Object { $_ } | Select-Object -Unique
 if (Get-Command ollama -ErrorAction SilentlyContinue) {
     foreach ($m in $models) {
@@ -109,24 +122,35 @@ if ($Mode -in 'all', 'worker') {
     Write-Host '  worker   updates itself when it starts (asks Fishtest for the current version)' -ForegroundColor DarkGray
 }
 
-# 1. ワーカー：普段と同じく MSYS2 の ucrt64 環境で worker.py を動かす（別ウィンドウで出力が見える）
+# 1. Worker: run worker.py in MSYS2's ucrt64 environment as usual (no window; output in log.txt)
 if ($Mode -in 'all', 'worker') {
-    if (Get-Running 'worker\.py' 'python3%') {
+    if (Test-Worker) {
         Write-Host '  worker   already running' -ForegroundColor DarkGray
     } else {
-        Start-Process -FilePath (Join-Path $msys 'msys2_shell.cmd') -ArgumentList @(
-            '-defterm', '-ucrt64', '-no-start', '-where', "`"$worker`"", '-c', '"env/bin/python3 worker.py"'
-        )
-        Write-Host '  worker   started (its own window)' -ForegroundColor Green
+        # No window: output goes to log.txt (the monitor shows it). Twice (2 and 8 Nov 2026) the worker
+        # froze for hours mid-task with its output going to a terminal tab: alive, idle, never reporting.
+        # Started like msys2_shell.cmd -ucrt64 would, but with CreateNoWindow so no console exists at all.
+        $log = Join-Path $worker 'log.txt'
+        if (Test-Path $log) { Move-Item $log "$log.previous" -Force }
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = Join-Path $msys 'usr\bin\bash.exe'
+        $psi.Arguments = '-lc "exec env/bin/python3 -u worker.py >> log.txt 2>&1"'
+        $psi.WorkingDirectory = $worker
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.EnvironmentVariables['MSYSTEM'] = 'UCRT64'
+        $psi.EnvironmentVariables['CHERE_INVOKING'] = '1'
+        [void][System.Diagnostics.Process]::Start($psi)
+        Write-Host "  worker   started in the background (output: $log)" -ForegroundColor Green
     }
 }
 
-# 2. モニター
+# 2. Monitor
 Start-Monitor
 if ($Mode -eq 'worker') { return }
 
-# 3. TV：ポートが応答してから開く（先に開くと接続エラーになって再読み込みが要る）。
-#    専用プロファイルなので、普段の Edge が開いていても自動再生（実況の声）が効く
+# 3. TV: open it once the port answers (opening it earlier shows a connection error that needs a reload).
+#    Its own profile means autoplay (the commentary voice) works even while your normal Edge is open
 if (Get-Running 'fishtest-tv-edge' 'msedge.exe') {
     Write-Host '  tv       already open (Alt+F4 closes it)' -ForegroundColor DarkGray
     return

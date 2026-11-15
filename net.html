@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stockfish Net Explorer</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0a0e0d; --panel: #101613; --panel2: #0d1310; --line: #1d2a23; --line2: #2a3d32;
+  --text: #e7efe9; --muted: #7d8f85; --dim: #56665d;
+  --green: #5fe08a; --blue: #6ea8ff; --amber: #f2b45a; --red: #ff6b6b; --violet: #b48cff; --cyan: #58d5e0;
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.45 var(--font); overflow: hidden; }
+a { color: var(--blue); }
+button { font: inherit; color: inherit; }
+
+/* top bar */
+#top { position: fixed; inset: 0 0 auto 0; height: 48px; display: flex; align-items: center; gap: 14px; padding: 0 14px;
+       background: var(--panel); border-bottom: 1px solid var(--line); z-index: 5; }
+#top .back { color: var(--muted); text-decoration: none; font-weight: 600; }
+#top .back:hover { color: var(--text); }
+#top h1 { margin: 0; font-size: 15px; font-weight: 700; }
+#top .net { color: var(--muted); font-size: 12.5px; font-family: Consolas, monospace; }
+#top .hint { margin-left: auto; color: var(--dim); font-size: 12px; white-space: nowrap; }
+
+/* side panels */
+.side { position: fixed; top: 48px; bottom: 0; width: 240px; background: var(--panel); z-index: 4; overflow-y: auto; }
+#layers { left: 0; border-right: 1px solid var(--line); }
+#inspect { right: 0; width: 320px; border-left: 1px solid var(--line); padding: 14px 16px 30px; }
+.side h3 { margin: 0; padding: 12px 14px 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+#layers .item { display: flex; gap: 8px; align-items: center; padding: 5px 14px; cursor: pointer; color: var(--muted); font-size: 13px; }
+#layers .item:hover { background: var(--panel2); color: var(--text); }
+#layers .item.on { background: #16261d; color: var(--text); }
+#layers .item i { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+#layers .group { padding: 10px 14px 3px; font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+#inspect h2 { margin: 2px 0 4px; font-size: 17px; }
+#inspect .kind { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+#inspect .props { margin: 12px 0; border-top: 1px solid var(--line); }
+#inspect .prop { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+#inspect .prop span:first-child { color: var(--muted); }
+#inspect .prop span:last-child { font-family: Consolas, monospace; text-align: right; }
+#inspect p { color: #c9d6cd; margin: 10px 0; }
+#inspect .src { font-size: 12.5px; }
+#inspect .empty { color: var(--dim); margin-top: 20px; }
+
+/* canvas */
+/* No text selection on the canvas: a drag pans, it never highlights (the inspector stays selectable) */
+#canvas { user-select: none; -webkit-user-select: none; }
+#canvas { position: fixed; top: 48px; left: 240px; right: 320px; bottom: 0; overflow: hidden; cursor: grab; touch-action: none;
+          background-color: var(--bg);
+          background-image: radial-gradient(circle, #1a2620 1px, transparent 1.2px); }
+#canvas.grabbing { cursor: grabbing; }
+#world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+#edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+
+.frame { position: absolute; background: var(--panel); border: 1px solid var(--line2); border-radius: 12px; padding: 16px 18px; cursor: pointer;
+         box-shadow: 0 8px 28px rgba(0,0,0,.35); }
+.frame:hover { border-color: #3e5a49; }
+.frame.on { border-color: var(--green); box-shadow: 0 0 0 2px var(--green), 0 8px 28px rgba(0,0,0,.35); }
+.frame .label { position: absolute; top: -22px; left: 2px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.frame h4 { margin: 0 0 6px; font-size: 16px; }
+.frame .big { font-size: 28px; font-weight: 800; letter-spacing: -.01em; }
+.frame .sub { color: var(--muted); font-size: 12.5px; }
+.frame .mono { font-family: Consolas, monospace; }
+.chip { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 700; background: #16261d; color: var(--green); }
+.feat { margin-top: 10px; padding: 10px 12px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line); }
+.feat b { font-size: 14px; }
+.bar { height: 6px; border-radius: 3px; background: #18231d; margin-top: 6px; overflow: hidden; }
+.bar > div { height: 100%; border-radius: 3px; }
+.layer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; margin-top: 7px; border-radius: 8px;
+         background: var(--panel2); border: 1px solid var(--line); font-size: 13px; }
+.layer .shape { font-family: Consolas, monospace; color: var(--cyan); }
+.down { text-align: center; color: var(--dim); font-size: 12px; line-height: 1; margin-top: 5px; }
+
+.lane-title { position: absolute; font-size: 22px; font-weight: 800; color: var(--text); white-space: nowrap; }
+.lane-sub { position: absolute; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.card { position: absolute; width: 260px; background: var(--panel); border: 1px solid var(--line2); border-radius: 10px; padding: 12px 14px; cursor: pointer; }
+.card:hover { border-color: #3e5a49; }
+.card.on { border-color: var(--green); box-shadow: 0 0 0 2px var(--green); }
+.card .date { color: var(--dim); font-size: 11.5px; }
+.card .t { font-weight: 700; margin: 3px 0; font-size: 13.5px; }
+.card .who { color: var(--muted); font-size: 12px; }
+.card .elo { margin-top: 6px; font-family: Consolas, monospace; font-size: 12.5px; color: var(--green); }
+.state { display: inline-block; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; padding: 1px 7px; border-radius: 99px; }
+.state.merged { background: #16301f; color: var(--green); }
+.state.open { background: #182640; color: var(--blue); }
+.state.closed { background: #22201d; color: var(--dim); }
+
+/* stack picker */
+.grid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; margin-top: 10px; }
+.grid div { aspect-ratio: 1; border-radius: 2px; background: #18231d; }
+.grid div.hit { background: var(--amber); box-shadow: 0 0 0 2px #fff3; }
+.ctl { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.ctl label { display: flex; align-items: center; gap: 6px; }
+.ctl select, .ctl input { background: var(--panel2); color: var(--text); border: 1px solid var(--line2); border-radius: 6px; padding: 2px 4px; font: inherit; }
+.ctl input[type=range] { accent-color: var(--amber); width: 110px; padding: 0; }
+
+/* neuron explorer */
+#ncv { display: block; margin-top: 12px; image-rendering: pixelated; cursor: crosshair; border-radius: 4px; }
+.boards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 12px; }
+.boards figure { margin: 0; }
+.boards figcaption { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.boards canvas { width: 100%; image-rendering: pixelated; border-radius: 3px; display: block; }
+.legend { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+.legend .ramp { width: 140px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #4da3ff, #101613, #ff9d4d); }
+
+/* zoom controls */
+#zoom { position: fixed; right: 336px; bottom: 16px; display: flex; gap: 4px; align-items: center; z-index: 4;
+        background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 4px; }
+#zoom button { background: none; border: 0; padding: 4px 9px; border-radius: 6px; cursor: pointer; color: var(--muted); }
+#zoom button:hover { background: var(--panel2); color: var(--text); }
+#zoom span { min-width: 48px; text-align: center; font-size: 12.5px; font-family: Consolas, monospace; }
+#loading { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--muted); z-index: 3; }
+
+@media (max-width: 900px) {
+  #layers { display: none; }
+  #inspect { top: auto; height: 38vh; width: 100%; border-left: 0; border-top: 1px solid var(--line); }
+  #canvas { left: 0; right: 0; bottom: 38vh; }
+  #zoom { right: 12px; bottom: calc(38vh + 12px); }
+  #top .hint { display: none; }
+}
+</style>
+</head>
+<body>
+<header id="top">
+  <a class="back" href="/">← Monitor</a>
+  <h1>🧠 Net Explorer</h1>
+  <span class="net" id="netname"></span>
+  <span class="hint">Drag to pan · Ctrl+scroll or pinch to zoom · Shift+1 fit all · Shift+2 zoom to selection</span>
+</header>
+<nav class="side" id="layers"><h3>Layers</h3><div id="layerList"></div></nav>
+<main id="canvas"><div id="world"><svg id="edges"></svg></div></main>
+<aside class="side" id="inspect"><div class="empty">Click any frame to inspect it.</div></aside>
+<div id="zoom"><button id="zout" title="Zoom out (−)">−</button><span id="zpct">100%</span><button id="zin" title="Zoom in (+)">+</button><button id="zfit" title="Fit all (Shift+1)">Fit</button></div>
+<div id="loading">Reading Stockfish's source…</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const num = n => Number(n).toLocaleString("en-US");
+const SRC = "https://github.com/official-stockfish/Stockfish/blob/master/src/";
+
+// ---------- camera ----------
+const cam = { x: 0, y: 0, z: 1 };
+const world = $("world"), canvas = $("canvas");
+function apply() {
+  world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})`;
+  $("zpct").textContent = Math.round(cam.z * 100) + "%";
+}
+function zoomAt(cx, cy, factor) {
+  const z = Math.min(4, Math.max(0.08, cam.z * factor));
+  cam.x = cx - (cx - cam.x) * (z / cam.z);
+  cam.y = cy - (cy - cam.y) * (z / cam.z);
+  cam.z = z;
+  apply();
+}
+let pendingFit = null;
+function fitTo(box, pad = 60, maxZ = 1.4) {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  // A hidden or not-yet-laid-out canvas has no size: fit once it gets one
+  if (w <= pad * 2 || h <= pad * 2) { pendingFit = [box, pad, maxZ]; return; }
+  pendingFit = null;
+  const z = Math.max(0.08, Math.min(maxZ, (w - pad * 2) / box.w, (h - pad * 2) / box.h));
+  cam.z = z;
+  cam.x = (w - box.w * z) / 2 - box.x * z;
+  cam.y = (h - box.h * z) / 2 - box.y * z;
+  apply();
+}
+let worldBox = { x: 0, y: 0, w: 1000, h: 800 };
+const center = () => [canvas.clientWidth / 2, canvas.clientHeight / 2];
+
+// Figma-style input: wheel pans, Ctrl/⌘+wheel (and trackpad pinch) zooms, drag the background to pan
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  if (e.ctrlKey || e.metaKey) zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0022));
+  else { cam.x -= e.shiftKey ? e.deltaY : e.deltaX; cam.y -= e.shiftKey ? 0 : e.deltaY; apply(); }
+}, { passive: false });
+
+const pointers = new Map();
+let drag = null, pinch = null;
+canvas.addEventListener("pointerdown", e => {
+  if (e.target.closest("input,select,a")) return;  // the stack picker's controls work normally
+  e.preventDefault();  // no text selection or native drag starting under the pointer
+  window.getSelection()?.removeAllRanges();
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: cam.z };
+    drag = null;
+    return;
+  }
+  // Frames are clickable; a drag that starts on one still pans once it moves
+  drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, moved: false, target: e.target };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinch && pointers.size === 2) {
+    const [a, b] = [...pointers.values()], r = canvas.getBoundingClientRect();
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    zoomAt((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top, (pinch.z * d / pinch.d) / cam.z);
+    return;
+  }
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+  drag.moved = true;
+  canvas.classList.add("grabbing");
+  cam.x = drag.cx + dx; cam.y = drag.cy + dy; apply();
+});
+const endPointer = e => {
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinch = null;
+  if (drag && !drag.moved && e.type === "pointerup" && drag.target.id === "ncv") pickNeuron(e);
+  else if (drag && !drag.moved && e.type === "pointerup") {
+    const el = drag.target.closest?.("[data-id]");
+    if (el && !drag.target.closest("select,input,a")) select(el.dataset.id);
+    else if (!el) select(null);
+  }
+  drag = null;
+  canvas.classList.remove("grabbing");
+};
+canvas.addEventListener("dragstart", e => e.preventDefault());
+canvas.addEventListener("pointerup", endPointer);
+canvas.addEventListener("pointercancel", endPointer);
+
+$("zin").onclick = () => zoomAt(...center(), 1.25);
+$("zout").onclick = () => zoomAt(...center(), 0.8);
+$("zfit").onclick = () => fitTo(worldBox);
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input,select")) return;
+  if (e.shiftKey && e.code === "Digit1") fitTo(worldBox);
+  else if (e.shiftKey && e.code === "Digit2" && selected) fitTo(items[selected].box, 80, 2);
+  else if (e.key === "+" || e.key === "=") zoomAt(...center(), 1.25);
+  else if (e.key === "-") zoomAt(...center(), 0.8);
+  else if (e.key === "0" && !e.shiftKey) { const [cx, cy] = center(); zoomAt(cx, cy, 1 / cam.z); }
+  else if (e.key === "Escape") select(null);
+});
+
+// ---------- items ----------
+const items = {};   // id -> {el, box, info()}
+let selected = null;
+function add(id, html, box, opts) {
+  const el = document.createElement("div");
+  el.className = opts.cls || "frame";
+  el.dataset.id = id;
+  Object.assign(el.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", ...(box.h ? { height: box.h + "px" } : {}) });
+  el.innerHTML = (opts.label ? `<div class="label">${esc(opts.label)}</div>` : "") + html;
+  world.appendChild(el);
+  items[id] = { el, box: { ...box, h: box.h || el.offsetHeight }, info: opts.info, layer: opts.layer, color: opts.color, group: opts.group };
+  return el;
+}
+function text(cls, s, x, y) {
+  const el = document.createElement("div");
+  el.className = cls; el.textContent = s;
+  Object.assign(el.style, { left: x + "px", top: y + "px" });
+  world.appendChild(el);
+}
+function select(id) {
+  if (selected && items[selected]) items[selected].el.classList.remove("on");
+  document.querySelectorAll("#layers .item.on").forEach(e => e.classList.remove("on"));
+  selected = id;
+  if (!id) { $("inspect").innerHTML = `<div class="empty">Click any frame to inspect it.</div>`; return; }
+  items[id].el.classList.add("on");
+  document.querySelector(`#layers .item[data-id="${CSS.escape(id)}"]`)?.classList.add("on");
+  const i = items[id].info();
+  $("inspect").innerHTML = `<div class="kind">${esc(i.kind)}</div><h2>${esc(i.title)}</h2>
+    ${i.props?.length ? `<div class="props">${i.props.map(([k, v]) => `<div class="prop"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("")}</div>` : ""}
+    ${(i.text || []).map(p => `<p>${p}</p>`).join("")}
+    ${i.src ? `<div class="src">Source: ${i.src.map(([label, url]) => `<a href="${url}" target="_blank" rel="noopener">${esc(label)}</a>`).join(" · ")}</div>` : ""}`;
+}
+function edge(a, b, color = "#3e5a49") {
+  edges.push([a, b, color]);
+}
+const edges = [];
+function drawEdges() {
+  const svg = $("edges");
+  svg.setAttribute("width", worldBox.x + worldBox.w + 400);
+  svg.setAttribute("height", worldBox.y + worldBox.h + 400);
+  svg.innerHTML = `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#5d7d69"/></marker></defs>` + edges.map(([a, b, color]) => {
+    const A = items[a].box, B = items[b].box;
+    const x1 = A.x + A.w, y1 = A.y + A.h / 2, x2 = B.x - 6, y2 = B.y + B.h / 2, mx = (x1 + x2) / 2;
+    return `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="${color}" stroke-width="2.5" marker-end="url(#arr)"/>`;
+  }).join("");
+}
+
+// ---------- build ----------
+async function build() {
+  let d;
+  try { d = await (await fetch("/netinfo")).json(); }
+  catch { $("loading").textContent = "Couldn't load /netinfo. Is the monitor running?"; return; }
+  $("loading").remove();
+  $("netname").textContent = d.net ? `master net: ${d.net}` : "";
+  const D = d.dims, inputs = D.psq + D.threats + D.pairs, L1 = d.l1, L2 = d.l2, L3 = d.l3, S = d.stacks;
+  const SS = d.stored_stacks || S;  // distinct stacks the file stores: several combinations can share one
+  const ftWeights = inputs * L1, stackParams = (L1 * L2 + L2) + (2 * L2 * L3 + L3) + (2 * L2 + 2 * L3 + 1);
+  const total = ftWeights + L1 + SS * stackParams;
+  const pct = n => (100 * n / total).toFixed(n / total < 0.01 ? 2 : 1) + "%";
+
+  // Row 1: the network, left to right
+  add("pos", `<h4>Position</h4><div class="big">♚ ♛ ♜</div>
+    <div class="sub" style="margin-top:8px">Every evaluation starts from the pieces on the board, seen twice: once from the side to move ("us") and once from the opponent ("them").</div>`,
+    { x: 0, y: 40, w: 250 }, { label: "Input", layer: "Position", color: "var(--text)", group: "Network",
+      info: () => ({ kind: "Input", title: "The position", text: [
+        "The net never sees moves or search: just where every piece stands. It looks at the board twice, once from each side's point of view, and the two views are combined later.",
+        "Because a move only changes a couple of pieces, Stockfish doesn't recompute everything per position: it adds and subtracts the inputs that changed (the \"accumulator\"). That's why NNUE is fast enough for millions of positions per second."] }) });
+
+  const feat = (name, n, color, desc) => `<div class="feat"><div style="display:flex;justify-content:space-between"><b>${name}</b><span class="mono">${num(n)}</span></div>
+    <div class="sub">${desc}</div><div class="bar"><div style="width:${(100 * n / inputs).toFixed(1)}%;background:${color}"></div></div></div>`;
+  add("inputs", `<h4>Input features</h4><div class="big">${num(inputs)}</div><div class="sub">on/off inputs per side, only a few dozen active at a time</div>
+    ${feat("K32H3", D.psq, "var(--blue)", "piece-squares, by king bucket and heavy material")}
+    ${feat("Full_Threats", D.threats, "var(--red)", "which piece attacks which")}
+    ${feat("PP_3Wide", D.pairs, "var(--violet)", "pairs of pawns")}`,
+    { x: 350, y: -40, w: 330 }, { label: "Feature sets", layer: "Input features", color: "var(--blue)", group: "Network",
+      info: () => ({ kind: "Input layer", title: "Input features", props: [
+          ["K32H3 (piece-squares)", num(D.psq)], ["Full_Threats", num(D.threats)], ["PP_3Wide (pawn pairs)", num(D.pairs)], ["Total per side", num(inputs)]],
+        text: [
+          "<b>K32H3</b>: every piece on every square, relative to your own king (32 king buckets, mirrored so the king is always on the e–h files) and to how much heavy material is left (3 blocks: no rooks or queens, some, or the opponent has a queen).",
+          "<b>Full_Threats</b>: one input for each \"this piece attacks that piece\" relationship. This is what the SFNN v17–v20 architectures added: the net sees tactics directly instead of inferring them.",
+          "<b>PP_3Wide</b>: pairs of pawns, so pawn structure (chains, doubled pawns, passers) is visible as a whole.",
+          "Each input is just on or off. A position switches on only a few dozen to a couple of hundred of the " + num(inputs) + "."],
+        src: [["k32h3.h", SRC + "nnue/features/k32h3.h"], ["full_threats.h", SRC + "nnue/features/full_threats.h"], ["pp_3wide.h", SRC + "nnue/features/pp_3wide.h"]] }) });
+
+  add("ft", `<h4>Feature transformer</h4><div class="big">${num(L1)}</div><div class="sub">numbers per side ("the accumulator")</div>
+    <div class="layer"><span>${num(inputs)} → ${num(L1)}</span><span class="shape">× 2 sides</span></div>
+    <div class="layer"><span>weights</span><span class="shape">${(ftWeights / 1e6).toFixed(1)} M</span></div>
+    <div class="sub" style="margin-top:10px"><span class="chip">${pct(ftWeights)} of the net</span></div>`,
+    { x: 780, y: 20, w: 280 }, { label: "Layer 0", layer: "Feature transformer", color: "var(--green)", group: "Network",
+      info: () => ({ kind: "Layer 0 · the big one", title: "Feature transformer", props: [
+          ["Inputs", num(inputs)], ["Outputs per side", num(L1)], ["Weights", num(ftWeights)], ["Share of all parameters", pct(ftWeights)]],
+        text: [
+          "Each active input adds its own column of " + num(L1) + " weights into the accumulator. Both sides use the same weights, from their own point of view.",
+          "This layer holds almost the whole net, which is why the .nnue file is over 100 MB. It's also why it's cheap: a move updates a few columns instead of recomputing anything.",
+          "Recipe settings like <code>ft-weight-decay</code>, the change behind the 10 Nov net, act on exactly these weights."],
+        src: [["nnue_feature_transformer.h", SRC + "nnue/nnue_feature_transformer.h"]] }) });
+
+  add("pair", `<h4>Pairwise multiply</h4><div class="big">${num(L1)}</div><div class="sub">2 sides × ${num(L1 / 2)}</div>
+    <div class="layer"><span>clip each to 0–1</span><span class="shape">${num(L1)}</span></div>
+    <div class="layer"><span>first half × second half</span><span class="shape">${num(L1 / 2)}</span></div>
+    <div class="layer"><span>us ⧺ them</span><span class="shape">${num(L1)}</span></div>`,
+    { x: 1160, y: 30, w: 270 }, { label: "Activation", layer: "Pairwise multiply", color: "var(--cyan)", group: "Network",
+      info: () => ({ kind: "Activation", title: "Clip and pairwise multiply", props: [["In", "2 × " + num(L1)], ["Out", num(L1)]],
+        text: ["Each side's " + num(L1) + " numbers are clipped, then the first half is multiplied by the second half, giving " + num(L1 / 2) + " per side. The side to move's half comes first, then the opponent's.",
+               "Many results come out as exactly zero, so the next layer only has to work on the non-zero ones: the \"sparse input\" trick that keeps it fast."],
+        src: [["nnue_feature_transformer.h", SRC + "nnue/nnue_feature_transformer.h"]] }) });
+
+  add("stack", `<h4>Layer stack</h4><div class="sub">one of ${S}, picked per position</div>
+    <div class="layer"><span>fc_0 (sparse)</span><span class="shape">${num(L1)} → ${L2}</span></div>
+    <div class="down">↓ squared clipped ReLU ⧺ clipped ReLU</div>
+    <div class="layer"><span>fc_1</span><span class="shape">${2 * L2} → ${L3}</span></div>
+    <div class="down">↓ squared clipped ReLU ⧺ clipped ReLU</div>
+    <div class="layer"><span>fc_2</span><span class="shape">${2 * L2 + 2 * L3} → 1</span></div>
+    <div class="sub" style="margin-top:8px">${num(stackParams)} weights each · ${SS !== S ? SS + " distinct in the file · " : ""}${pct(SS * stackParams)} of the net in all</div>`,
+    { x: 1530, y: -10, w: 300 }, { label: "Layers 1–3", layer: "Layer stack", color: "var(--amber)", group: "Network",
+      info: () => ({ kind: "Layers 1–3", title: "Layer stack", props: [
+          ["fc_0", num(L1) + " → " + L2], ["fc_1", 2 * L2 + " → " + L3], ["fc_2", (2 * L2 + 2 * L3) + " → 1"], ["Combinations", S], ["Distinct stacks in the file", SS], ["Weights per stack", num(stackParams)]],
+        text: ["A small dense network: after each layer, the outputs go through two activations side by side (squared and plain clipped ReLU), and the last layer sees the outputs of both earlier layers.",
+               "There are " + S + " kinds of position, each with its own stack. In this net's file only " + SS + " distinct stacks are stored: rarer combinations fall back to a shared one. The picker below shows which combination a position falls into."],
+        src: [["nnue_architecture.h", SRC + "nnue/nnue_architecture.h"]] }) });
+
+  add("out", `<h4>Evaluation</h4><div class="big">1 number</div><div class="sub">fc_2 output + a skip connection from fc_0, scaled for search</div>`,
+    { x: 1930, y: 60, w: 240 }, { label: "Output", layer: "Evaluation", color: "var(--green)", group: "Network",
+      info: () => ({ kind: "Output", title: "Evaluation", text: [
+        "The final number is fc_2's output plus a shortcut straight from fc_0 (output 30 minus output 31), rescaled so that 600 internal units make one unit of the net's scale.",
+        "Search then uses this number millions of times per second to decide which lines are worth looking at."],
+        src: [["nnue_architecture.h", SRC + "nnue/nnue_architecture.h"], ["network.cpp", SRC + "nnue/network.cpp"]] }) });
+
+  // The stack picker, with live controls
+  add("picker", `<h4>Which stack runs?</h4><div class="sub">${S} = 8 piece-count bands × 4 queen cases × 3 pawn layouts × 2</div>
+    <div class="ctl">
+      <label>Pieces <input type="range" id="pk" min="2" max="32" value="24"><span id="pkv" class="mono">24</span></label>
+      <label>Queens <select id="pq"><option value="3">both sides</option><option value="2">only us</option><option value="1">only them</option><option value="0">none</option></select></label>
+      <label>Pawns <select id="pl"><option value="0">both wings</option><option value="1">one wing</option><option value="2">no pawns</option></select></label>
+      <label>Officers <select id="pm"><option value="1">2+ on a side</option><option value="0">at most 1</option></select></label>
+    </div>
+    <div class="grid" id="grid"></div><div class="sub" id="pickOut" style="margin-top:8px"></div>`,
+    { x: 1530, y: 470, w: 520 }, { label: "Layer stack selection", layer: "Stack picker", color: "var(--amber)", group: "Network",
+      info: () => ({ kind: "Routing", title: "Which layer stack runs", props: [["Piece-count bands", "8 (every 4 pieces)"], ["Queen cases", "4"], ["Pawn layouts", "3"], ["Officers", "2"], ["Combinations", S]],
+        text: ["Before the small layers run, Stockfish picks one of " + S + " stacks from four facts about the position: how many pieces are left, who still has a queen, whether pawns are on both wings, one wing or gone, and whether either side has two or more pieces besides pawns and king.",
+               "Try the controls on the frame: the highlighted square is the combination your position falls into. (The file can map some rare combinations onto a shared stack.)"],
+        src: [["network.cpp · layer_stack()", SRC + "nnue/network.cpp"]] }) });
+  const grid = $("grid");
+  grid.innerHTML = Array.from({ length: 192 }, () => "<div></div>").join("");
+  const pick = () => {
+    const pieces = +$("pk").value, band = Math.floor((pieces - 1) / 4), q = +$("pq").value, l = +$("pl").value, m = +$("pm").value;
+    const idx = ((band * 4 + q) * 3 + l) * 2 + m;
+    $("pkv").textContent = pieces;
+    [...grid.children].forEach((c, i) => c.classList.toggle("hit", i === idx));
+    $("pickOut").textContent = `Combination #${idx}: band ${band} (${band * 4 + 1}–${band * 4 + 4} pieces)`;
+  };
+  ["pk", "pq", "pl", "pm"].forEach(id => $(id).addEventListener("input", pick));
+  pick();
+
+  edge("pos", "inputs"); edge("inputs", "ft"); edge("ft", "pair"); edge("pair", "stack"); edge("stack", "out");
+
+  // Inside the feature transformer: what each of the L1 neurons learned, as piece-square heatmaps
+  const kings = []; for (let r = 1; r <= 8; r++) for (const f of "efgh") kings.push(f + r);
+  add("neurons", `<h4>Inside the feature transformer: all ${num(L1)} neurons</h4>
+    <div class="sub">Each tile is one neuron: how much a piece on each square pushes it up (orange) or down (blue).
+      Click a tile to open it. Real weights from <span class="mono">${esc(d.net || "the master net")}</span>.</div>
+    <div class="ctl">
+      <label>Our king on <select id="nk">${kings.map(k => `<option${k === "g1" ? " selected" : ""}>${k}</option>`).join("")}</select></label>
+      <label>Material <select id="nb"><option value="0">no rooks or queens</option><option value="1" selected>rooks/queens, they have no queen</option><option value="2">they have a queen</option></select></label>
+      <label>Piece <select id="ns">${SLOT_NAMES.map((n, i) => `<option value="${i}"${i === 8 ? " selected" : ""}>${n}</option>`).join("")}</select></label>
+    </div>
+    <div class="legend"><span>pushes down</span><span class="ramp"></span><span>pushes up</span><span id="nstat" class="mono"></span></div>
+    <canvas id="ncv" width="${32 * 36}" height="${Math.ceil(L1 / 32) * 36}" style="width:${32 * 36}px"></canvas>`,
+    { x: 2330, y: -80, w: 32 * 36 + 40 }, { label: "Weights", layer: "All neurons", color: "#ff9d4d", group: "Inside the net",
+      info: () => ({ kind: "Real weights", title: "All " + num(L1) + " neurons", props: [
+          ["King square", W.data ? W.data.king + " (bucket " + W.data.bucket + ")" : "…"], ["Material block", $("nb").selectedOptions[0].text], ["Piece", SLOT_NAMES[+$("ns").value]]],
+        text: ["Every input switches on one column of " + num(L1) + " weights, one per neuron. Here the columns for one piece type are laid out as 8×8 boards, one tile per neuron, so you can see what each neuron reacts to.",
+               "Inputs depend on where your own king stands (mirrored so it's always on files e–h) and how much heavy material is left. That's why there are king-square and material controls.",
+               "Look for structure: neurons that care about the king's shelter, the centre, a single file, or pieces near the enemy king. Threat and pawn-pair weights aren't shown; this is the piece-square part."],
+        src: [["k32h3.h (input layout)", SRC + "nnue/features/k32h3.h"]] }) });
+  add("neuron", `<h4 id="nTitle">Neuron —</h4><div class="sub" id="nSub">Click a tile in the grid to open it here.</div><div class="boards" id="nBoards"></div>`,
+    { x: 2330 + 32 * 36 + 120, y: -80, w: 620 }, { label: "Selected neuron", layer: "Selected neuron", color: "#ff9d4d", group: "Inside the net",
+      info: () => neuronInfo() });
+  edge("ft", "neurons", "#6b5232");
+  ["nk", "nb"].forEach(id => $(id).addEventListener("change", loadWeights));
+  $("ns").addEventListener("change", drawGrid);
+
+  // Row 2: history of the default net
+  const hy = 1450;  // below the neuron grid, which is the tallest thing on the canvas
+  text("lane-title", "The net's history on master", 0, hy);
+  text("lane-sub", "Each card replaced the one before it. Elo is the LTC test's estimate.", 0, hy + 34);
+  (d.history || []).slice().reverse().forEach((n, i) => {
+    const id = "net-" + n.sha.slice(0, 8);
+    add(id, `<div class="date">${esc(n.date)}</div><div class="t">${esc(n.subject)}</div><div class="who">${esc(n.author)}</div>
+      ${n.elo ? `<div class="elo">${n.elo.elo >= 0 ? "+" : ""}${n.elo.elo.toFixed(2)} Elo (${n.elo.lo.toFixed(1)} to ${n.elo.hi.toFixed(1)})</div>` : ""}`,
+      { x: i * 290, y: hy + 80, w: 260 }, { cls: "card", layer: n.date + " · " + n.author, color: "var(--green)", group: "Net history",
+        info: () => ({ kind: "Net on master · " + n.date, title: n.subject, props: [["Author", n.author], ["Net file", n.net || "—"], ["Commit", n.sha.slice(0, 8)],
+            ...(n.elo ? [["LTC Elo", (n.elo.elo >= 0 ? "+" : "") + n.elo.elo.toFixed(2)], ["95% range", n.elo.lo.toFixed(2) + " to " + n.elo.hi.toFixed(2)]] : [])],
+          src: [["commit", "https://github.com/official-stockfish/Stockfish/commit/" + n.sha],
+                ...(n.nettest ? [["nettest PR #" + n.nettest, "https://github.com/vondele/nettest/pull/" + n.nettest]] : []),
+                ...(n.elo ? [["LTC test", "https://tests.stockfishchess.org/tests/view/" + n.elo.run]] : [])] }) });
+  });
+
+  // Row 3: what the net trainers are trying right now
+  const ny = hy + 420, prs = d.nettest || [];
+  text("lane-title", "Training experiments on nettest", 0, ny);
+  const by = {};
+  prs.forEach(p => (by[p.author] = by[p.author] || []).push(p));
+  text("lane-sub", `The latest ${prs.length} recipe PRs. A merged one became a master net; most get closed. Who's experimenting: ` +
+    Object.entries(by).sort((a, b) => b[1].length - a[1].length).map(([a, l]) => `${a} ${l.length}`).join(", "), 0, ny + 34);
+  prs.forEach((p, i) => {
+    add("pr-" + p.number, `<span class="state ${p.state}">${p.state}</span> <span class="date">#${p.number} · ${esc(p.opened)}</span>
+      <div class="t">${esc(p.title)}</div><div class="who">${esc(p.author)}</div>`,
+      { x: (i % 8) * 290, y: ny + 80 + Math.floor(i / 8) * 130, w: 260 },
+      { cls: "card", layer: "#" + p.number + " " + p.title, color: p.state === "merged" ? "var(--green)" : p.state === "open" ? "var(--blue)" : "var(--dim)", group: "Experiments",
+        info: () => ({ kind: "nettest PR · " + p.state, title: p.title, props: [["Author", p.author], ["Opened", p.opened], ["Number", "#" + p.number]],
+          text: [p.state === "merged" ? "This recipe change was accepted: it produced a net that beat master." : p.state === "open" ? "Still being tried: the training cluster may be running it, or it's waiting on Fishtest." : "Closed: the net it produced didn't beat master, or the idea was replaced."],
+          src: [["Open on GitHub", p.url]] }) });
+  });
+
+  // Layers panel
+  const groups = {};
+  Object.entries(items).forEach(([id, it]) => (groups[it.group] = groups[it.group] || []).push([id, it]));
+  $("layerList").innerHTML = Object.entries(groups).map(([g, list]) => `<div class="group">${esc(g)}</div>` +
+    list.map(([id, it]) => `<div class="item" data-id="${esc(id)}"><i style="background:${it.color}"></i>${esc(it.layer)}</div>`).join("")).join("");
+  $("layerList").addEventListener("click", e => {
+    const id = e.target.closest(".item")?.dataset.id;
+    if (id) { select(id); fitTo(items[id].box, 80, 1.6); }
+  });
+
+  // Sizes are known once rendered: measure, draw the arrows, frame everything
+  Object.values(items).forEach(it => { it.box.h = it.el.offsetHeight; });
+  const all = Object.values(items).map(it => it.box);
+  const minX = Math.min(...all.map(b => b.x)), minY = Math.min(...all.map(b => b.y)) - 40;
+  worldBox = { x: minX, y: minY, w: Math.max(...all.map(b => b.x + b.w)) - minX, h: Math.max(...all.map(b => b.y + b.h)) - minY };
+  drawEdges();
+  fitTo({ x: -40, y: -80, w: 2260, h: 860 });
+  loadWeights();
+}
+
+// ---------- weights ----------
+const SLOT_NAMES = ["Our pawn", "Their pawn", "Our knight", "Their knight", "Our bishop", "Their bishop",
+                    "Our rook", "Their rook", "Our queen", "Their queen", "Either king"];
+const W = { data: null, w: null, biases: null, neuron: null };
+const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+async function loadWeights() {
+  $("nstat").textContent = "loading…";
+  let r;
+  try { r = await (await fetch(`/netweights?king=${$("nk").value}&block=${$("nb").value}`)).json(); }
+  catch { $("nstat").textContent = "couldn't load the weights"; return; }
+  if (r.error) { $("nstat").textContent = r.error; return; }
+  W.data = r;
+  W.w = new Int8Array(b64(r.weights).buffer);
+  W.biases = new Int16Array(b64(r.biases).buffer);
+  drawGrid();
+  if (W.neuron != null) showNeuron(W.neuron);
+}
+
+// weight of (slot, square, neuron); the file is input-major: input = slot*64 + square
+const wAt = (slot, sq, n) => W.w[(slot * 64 + sq) * W.data.l1 + n];
+
+function color(v, scale) {
+  const t = Math.max(-1, Math.min(1, v / scale));
+  const base = [16, 22, 19], pos = [255, 157, 77], neg = [77, 163, 255], to = t >= 0 ? pos : neg, a = Math.abs(t);
+  return `rgb(${base.map((b, i) => Math.round(b + (to[i] - b) * a)).join(",")})`;
+}
+function scaleFor(slot) {
+  // 99th percentile of |weight| for this piece, so a few extreme weights don't wash out the rest
+  const vals = [];
+  for (let sq = 0; sq < 64; sq++) for (let n = 0; n < W.data.l1; n += 3) vals.push(Math.abs(wAt(slot, sq, n)));
+  vals.sort((a, b) => a - b);
+  return Math.max(1, vals[Math.floor(vals.length * 0.99)]);
+}
+function drawBoard(ctx, ox, oy, cell, slot, n, scale) {
+  for (let sq = 0; sq < 64; sq++) {
+    ctx.fillStyle = color(wAt(slot, sq, n), scale);
+    ctx.fillRect(ox + (sq % 8) * cell, oy + (7 - Math.floor(sq / 8)) * cell, cell, cell);
+  }
+}
+function drawGrid() {
+  if (!W.data) return;
+  const cv = $("ncv"), ctx = cv.getContext("2d"), slot = +$("ns").value, scale = scaleFor(slot);
+  ctx.fillStyle = "#0a0e0d"; ctx.fillRect(0, 0, cv.width, cv.height);
+  for (let n = 0; n < W.data.l1; n++) drawBoard(ctx, (n % 32) * 36 + 2, Math.floor(n / 32) * 36 + 2, 4, slot, n, scale);
+  if (W.neuron != null) { ctx.strokeStyle = "#5fe08a"; ctx.lineWidth = 2; ctx.strokeRect((W.neuron % 32) * 36 + 1, Math.floor(W.neuron / 32) * 36 + 1, 34, 34); }
+  $("nstat").textContent = `king ${W.data.king} · scale ±${scale}`;
+}
+function pickNeuron(e) {
+  if (!W.data) return;
+  const r = $("ncv").getBoundingClientRect();
+  const col = Math.floor((e.clientX - r.left) / r.width * 32), row = Math.floor((e.clientY - r.top) / r.height * Math.ceil(W.data.l1 / 32));
+  const n = row * 32 + col;
+  if (n >= 0 && n < W.data.l1) { W.neuron = n; drawGrid(); showNeuron(n); }
+}
+function showNeuron(n) {
+  $("nTitle").textContent = `Neuron ${n}`;
+  $("nSub").textContent = `bias ${W.biases[n]} · our king on ${W.data.king} · ${$("nb").selectedOptions[0].text}`;
+  const order = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9];  // ours first, then theirs
+  $("nBoards").innerHTML = order.map(s => `<figure><figcaption>${SLOT_NAMES[s]}</figcaption><canvas width="128" height="128" data-slot="${s}"></canvas></figure>`).join("");
+  let scale = 1;
+  for (let s = 0; s < 11; s++) for (let sq = 0; sq < 64; sq++) scale = Math.max(scale, Math.abs(wAt(s, sq, n)));
+  $("nBoards").querySelectorAll("canvas").forEach(c => drawBoard(c.getContext("2d"), 0, 0, 16, +c.dataset.slot, n, scale));
+  items.neuron.box.h = items.neuron.el.offsetHeight;
+  select("neuron");
+}
+function neuronInfo() {
+  const n = W.neuron;
+  if (n == null || !W.data) return { kind: "Neuron", title: "No neuron selected", text: ["Click a tile in the grid of all neurons."] };
+  const all = [];
+  for (let s = 0; s < 11; s++) for (let sq = 0; sq < 64; sq++) all.push([wAt(s, sq, n), s, sq]);
+  all.sort((a, b) => b[0] - a[0]);
+  const sqName = sq => "abcdefgh"[sq % 8] + (Math.floor(sq / 8) + 1);
+  const fmt = ([v, s, sq]) => `${SLOT_NAMES[s].toLowerCase()} on ${sqName(sq)} (${v > 0 ? "+" : ""}${v})`;
+  return { kind: "Neuron " + n, title: "What neuron " + n + " reacts to", props: [["Bias", W.biases[n]], ["King on", W.data.king], ["Strongest up", fmt(all[0])], ["Strongest down", fmt(all[all.length - 1])]],
+    text: ["Pushes it up most: " + all.slice(0, 5).map(fmt).join(", ") + ".",
+           "Pushes it down most: " + all.slice(-5).reverse().map(fmt).join(", ") + ".",
+           "The neuron's value is its bias plus the weights of every piece on the board (plus threats and pawn pairs, not shown). It's then clipped and multiplied with its partner neuron before the layer stack sees it."] };
+}
+apply();
+build();
+new ResizeObserver(() => { if (pendingFit) fitTo(...pendingFit); }).observe(canvas);
+</script>
+</body>
+</html>

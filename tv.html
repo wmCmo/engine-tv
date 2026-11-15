@@ -9,8 +9,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
 <style>
-  /* 部屋の向こうから見る前提：文字は大きく、情報は少なく、操作は不要。
-     見た目は Duolingo のチェス盤の雰囲気（紺の盤・丸い2トーンの駒・下に厚みのある縁）を、自前の絵で再現している */
+  /* Made to be watched from across the room: big text, little information, nothing to operate.
+     The look follows Duolingo's chess board (navy board, round two-tone pieces, a thick bottom edge), with original artwork */
   :root {
     --bg: #131f24;
     --card: #1f2f38;
@@ -40,7 +40,7 @@
   #stage { position: absolute; inset: 0 0 15vh 0; display: grid;
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 4vw; padding: 8vh 4vw 2vh; }
 
-  /* 盤面：角丸の枠と、下側の厚み（リップ） */
+  /* Board: a rounded frame with a thick lower lip */
   .left { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; }
   .boardwrap { position: relative; display: flex; gap: 1.6vh; height: min(64vh, 50vw); }
   #evalbar { position: relative; width: 2.6vh; height: 100%; background: #5b2a30; border-radius: 1.3vh; overflow: hidden;
@@ -68,7 +68,7 @@
   #matchup { margin-top: 2.6vh; font-size: 2.6vh; color: var(--muted); white-space: nowrap; font-weight: 700; }
   #matchup b { color: var(--fg); font-weight: 900; }
 
-  /* 右側：カード状のまとまり。数字は大きく、説明は短く */
+  /* Right side: cards with big numbers and short explanations */
   .right { display: flex; flex-direction: column; justify-content: center; gap: 2vh; min-width: 0; }
   .card { background: var(--card); border-radius: 2.2vh; padding: 1.8vh 2.6vh; box-shadow: 0 0.6vh 0 var(--card-lip); }
   .label { font-size: 1.9vh; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 800; }
@@ -106,12 +106,12 @@
   #moves { margin-top: 1.2vh; font-size: 3vh; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; overflow: hidden; min-height: 4vh; font-weight: 700; }
   #moves .last { color: var(--fg); font-weight: 900; }
 
-  /* 下：この対局の評価値の推移 */
+  /* Bottom: this game's evaluation over time */
   #graphwrap { position: absolute; left: 4vw; right: 4vw; bottom: 2.5vh; height: 10vh; }
   #graph { width: 100%; height: 100%; display: block; overflow: visible; }
   #graphLabel { position: absolute; right: 0; top: 0; font-size: 1.7vh; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; }
 
-  /* 実況の字幕（盤の下部に重ねる）と、実況のオン/オフ表示 */
+  /* Commentary subtitles (over the bottom of the board) and the commentary on/off badge */
   #caption { position: absolute; left: 4%; right: 4%; bottom: 3.5%; z-index: 4; padding: 1.4vh 2.2vh; border-radius: 1.8vh;
     background: rgba(19, 31, 36, 0.92); box-shadow: 0 0.6vh 0 var(--card-lip); font-size: 2.6vh; line-height: 1.3;
     font-weight: 800; color: var(--fg); opacity: 0; transform: translateY(1vh); transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
@@ -126,7 +126,16 @@
     box-shadow: 0 0.5vh 0 var(--card-lip); color: var(--gold); opacity: 0; transition: opacity 0.6s; }
   #impact.show { opacity: 1; }
   #impact .k { color: var(--muted); font-weight: 700; }
-  #hint { position: fixed; left: 2vw; bottom: 0.6vh; font-size: 1.8vh; color: var(--dim); transition: opacity 1s; }
+  #hint { position: fixed; left: 2vw; bottom: 0.6vh; font-size: 1.8vh; color: var(--dim); transition: opacity 1s;
+    display: flex; gap: 1.5vh; align-items: baseline; }
+  #hint a { color: var(--muted); font-weight: 800; text-decoration: none; pointer-events: auto; }
+  #hint a:hover { color: var(--fg); }
+  /* Hidden with the mouse: no stray clicks on an invisible link */
+  #hint.gone { pointer-events: none; }
+  #hint.gone a { pointer-events: none; }
+  /* Phones never move a mouse, so the way back stays visible there */
+  body.phone #hint { opacity: 1 !important; }
+  body.phone #hint a { pointer-events: auto; }
 
   /* Phones: no commentary, so its badge goes */
   body.phone #narr, body.phone #caption { display: none; }
@@ -186,7 +195,7 @@
       <div class="label" id="patchLabel">Your PC is testing a Stockfish patch</div>
       <div id="patch">—</div>
       <div class="sub" id="vs">vs Stockfish master</div>
-      <!-- スカウティングレポート：差分から作った「このパッチは何をするのか」 -->
+      <!-- Scouting report: "what this patch does", written from its diff -->
       <div id="brief">
         <div id="headline"></div>
         <div id="explain"></div>
@@ -211,14 +220,14 @@
   </section>
 </div>
 <div id="graphwrap"><div id="graphLabel">evaluation · patch ↑ master ↓</div><svg id="graph" viewBox="0 0 1000 100" preserveAspectRatio="none"></svg></div>
-<div id="hint">click for fullscreen</div>
+<div id="hint"><a id="home" href="/">← Monitor</a><span id="fsHint">click for fullscreen</span></div>
 <div id="impact"></div>
 <div id="narr"><span id="narrText">🎙 Commentary on</span><span class="k">· n</span></div>
 
 <script type="module">
 import { Chess } from "/vendor/chess.js";
 
-const MOVE_MS = 700        // 1手の間隔（遠目でも追える速さ）
+const MOVE_MS = 700        // time per move (slow enough to follow from across the room)
 const START_PAUSE_MS = 1800
 const END_PAUSE_MS = 3800
 const POLL_MS = 5000
@@ -227,7 +236,7 @@ const $ = id => document.getElementById(id)
 const boardEl = $("board")
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-// ---- Pieces: Zach's artwork (art/), built into PIECE_ART by tools/build_pieces.py ----
+// ---- Pieces: original artwork (art/), built into PIECE_ART by tools/build_pieces.py ----
 // Each piece is drawn in its own 120x120 box (`box` is that box in the artwork's coordinates),
 // with every base on the same line, so pieces of different heights stand level.
 // <PIECES> generated by tools/build_pieces.py from art/; edit the art, not this block
@@ -246,7 +255,7 @@ for (const [key, { box, svg }] of Object.entries(PIECE_ART)) {
 const pieceSvg = (color, type) =>
   `<svg class="pc" viewBox="10 0 80 97"><use href="#pc-${color}${type}" x="0" y="0" width="100" height="100"/></svg>`
 
-// ---- 盤面（常にパッチ側から見る：パッチの駒が手前） ----
+// ---- Board (always seen from the patch's side: its pieces at the bottom) ----
 const squares = {}
 const whiteView = []
 for (let r = 8; r >= 1; r--) {
@@ -273,7 +282,7 @@ const draw = (chess, move) => {
   if (!move) return
   squares[move.from].classList.add("hl")
   squares[move.to].classList.add("hl")
-  // 動いた駒を元のマスから滑らせ（FLIP）、着地で少し弾ませる
+  // slide the moved piece from its old square (FLIP) and bounce it slightly on landing
   const piece = squares[move.to].firstElementChild
   if (!piece) return
   const a = squares[move.from].getBoundingClientRect()
@@ -286,8 +295,8 @@ const draw = (chess, move) => {
   piece.addEventListener("transitionend", () => piece.classList.add("land"), { once: true })
 }
 
-// ---- 評価値（パッチ側から見た値、ポーン単位。正ならパッチ有利） ----
-// 線形だと ±0.5 程度の揺れが平らに見えるので tanh で圧縮する：小さな優勢も見え、大差は頭打ちになる
+// ---- Evaluation (from the patch's side, in pawns; positive = the patch is better) ----
+// A linear scale flattens swings of about ±0.5, so compress with tanh: small edges show, big ones level off
 const squash = ev => Math.tanh((ev ?? 0) / 2.5)
 const setEval = ev => {
   $("evalfill").style.height = `${50 + squash(ev) * 48}%`
@@ -313,7 +322,7 @@ const drawGraph = (evals, upto) => {
     <polyline points="${line}" fill="none" stroke="#ff4b4b" stroke-width="4" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round" clip-path="url(#gBelow)"/>`
 }
 
-// ---- 対局の読み方 ----
+// ---- Reading the games ----
 const patchName = event => (event.match(/:\s*(.+?)\s+vs\s+/) || [])[1] || "patch"
 const baseName = event => (event.match(/\s+vs\s+(.+)$/) || [])[1] || "master"
 const isPatch = name => name.startsWith("New")
@@ -338,7 +347,7 @@ const showMoves = (sans, upto, startFullmove, whiteFirst) => {
   $("moves").innerHTML = parts.join("&nbsp;&nbsp;")
 }
 
-// ---- 実況：monitor.py の /commentary が Ollama で台本（手数ごとのセリフ）を作り、Edge の音声で読み上げる ----
+// ---- Commentary: monitor.py's /commentary writes a script (lines per ply) with Ollama; Edge's voices read it ----
 const NARR_KEY = "tv-narrator"
 // On a phone (touch screen, or /tv?phone) there is no commentary at all: no voice, no subtitles,
 // and no /commentary requests, so the PC's GPU isn't used for it.
@@ -357,8 +366,8 @@ const requestScript = g => {
   return scripts.get(key)
 }
 
-// サッカー実況らしく英国英語の男性の自然音声を優先（Edge の「Ryan (Natural)」、Chrome なら「Google UK English Male」）。
-// 英語の音声しか選ばない：Windows の既定音声は日本語（Haruka）なので、選び損ねると英語を日本語の声で読んでしまう
+// Prefer a natural British English male voice, like a football commentator (Edge's "Ryan (Natural)", Chrome's "Google UK English Male").
+// Only ever pick an English voice: a system default voice in another language would read English with the wrong accent
 let voice = null
 const pickVoice = () => {
   const score = v => (/Ryan/.test(v.name) ? 100 : 0) + (/Google UK English Male/.test(v.name) ? 90 : 0) +
@@ -378,7 +387,7 @@ let speechBlocked = false
 const say = text => new Promise(resolve => {
   if (!narratorOn || !text) return resolve()
   if (!voice) pickVoice()
-  // 英語の音声が一つも無ければ読み上げない（字幕だけにする）
+  // with no English voice at all, don't speak (subtitles only)
   if (!voice) return setTimeout(resolve, 2500 + text.length * 45)
   const u = new SpeechSynthesisUtterance(text)
   u.voice = voice
@@ -389,7 +398,7 @@ const say = text => new Promise(resolve => {
   u.onstart = () => { started = true; speechBlocked = false }
   u.onend = finish
   u.onerror = finish
-  // 自動再生が許されていないと話し始めない。そのときは止まらずに進め、クリックを促す
+  // speech can't start until autoplay is allowed: keep playing, and ask for a click
   const noStart = setTimeout(() => {
     if (started) return
     speechBlocked = true
@@ -409,7 +418,7 @@ const showNarr = () => {
     : "🎙 Subtitles only · no English voice"
 }
 
-// ---- 再生リスト：新しい対局を優先し、見終えたら古いものを順に回す ----
+// ---- Playlist: newest games first, then older ones in turn ----
 let file = null
 let games = []
 const played = new Set()
@@ -421,7 +430,7 @@ const loadGames = async name => {
   file = name
 }
 
-// まだ流していない対局のうち一番新しいもの。全部流し終えたら null（同じ対局は繰り返さない）
+// the newest game not shown yet; null once everything has been shown (no game repeats)
 const nextGame = () => {
   for (let i = games.length - 1; i >= 0; i--) {
     if (!played.has(gameKey(games[i]))) return games[i]
@@ -431,7 +440,7 @@ const nextGame = () => {
 
 const play = async g => {
   played.add(gameKey(g))
-  // この対局の台本を頼み、次に流す対局の台本も先に作らせておく（1局あたり数秒かかるため）
+  // request this game's script, and prepare the next game's too (each takes a few seconds)
   let lines = null
   if (narratorOn) {
     requestScript(g).then(s => { lines = new Map((s.lines || []).map(l => [l.ply, l.text])) })
@@ -444,7 +453,7 @@ const play = async g => {
   const startFullmove = Number(parts[5]) || 1
   const patchWhite = isPatch(g.white)
   const patch = patchName(g.event)
-  // 評価値は白番から見た値なので、パッチが黒番なら符号を反転して「上＝パッチ有利」にする
+  // evaluations are from White's side: flip the sign when the patch plays Black, so up = good for the patch
   const pov = g.evals.map(e => (e == null ? null : patchWhite ? e : -e))
   orient(patchWhite)
   $("matchup").innerHTML = `<b>${patch}</b> (${patchWhite ? "white" : "black"}) vs ${baseName(g.event)} (${patchWhite ? "black" : "white"})`
@@ -455,7 +464,7 @@ const play = async g => {
   drawGraph(pov, -1)
   caption("")
   await sleep(START_PAUSE_MS)
-  // キックオフの一言を待つ（最大15秒）。間に合わなければ実況なしで始め、届いた時点から話す
+  // wait for the kickoff line (up to 15 s); if it's late, start silent and speak from when it arrives
   if (narratorOn && lines === null) {
     caption("The commentator is taking their seat…", true)
     for (let w = 0; w < 30 && lines === null; w++) await sleep(500)
@@ -471,7 +480,7 @@ const play = async g => {
     showMoves(g.sans, i, startFullmove, whiteFirst)
     const line = narratorOn ? lines?.get(i) : null
     if (line) {
-      // セリフの間は盤を止め、言葉と局面をそろえる
+      // hold the board while a line is spoken, so words and position match
       caption(line)
       await say(line)
       showNarr()
@@ -489,7 +498,7 @@ const play = async g => {
   await sleep(END_PAUSE_MS)
 }
 
-// 全部流し終えたら、最後の局面のまま止めて新しい対局を待つ（refresh が新しく終わった対局を取り込むと再開する）
+// once everything has been shown, hold the final position and wait (playback resumes when refresh picks up a new finished game)
 const loop = async () => {
   let waiting = false
   for (;;) {
@@ -511,10 +520,10 @@ const loop = async () => {
   }
 }
 
-// ---- 右側の数字と状態 ----
+// ---- Numbers and status on the right ----
 const fmtAgo = s => s == null ? "" : s < 90 ? `${Math.round(s)}s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 172800 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} days ago`
 
-// 長いパッチ名（simp-conthist-ply5 など）は、枠に収まるまで文字を小さくする
+// shrink long patch names (like simp-conthist-ply5) until they fit their box
 const fitText = el => {
   let size = 7.5
   el.style.fontSize = `${size}vh`
@@ -536,7 +545,7 @@ const refresh = async () => {
     $("statusText").textContent = `Worker stopped · last activity ${fmtAgo(d.last_age_s)} · replaying its games`
   }
 
-  // 新しいバッチは最初の対局が終わるまで PGN が無い。その間は空欄ではなく「対局中」と出す
+  // a new batch has no PGN until its first game ends: show "playing" instead of blanks
   const gs = d.game_stats
   const waiting = gs == null && d.alive
   $("wins").textContent = gs ? gs.wins : waiting ? "0" : "–"
@@ -552,16 +561,16 @@ const refresh = async () => {
     $("progText").textContent = `${done} / ${p.size} games` + (d.alive && p.rate_per_min ? ` · ${p.rate_per_min.toFixed(1)} per min` : "")
   }
 
-  // 盤面は一番新しい PGN を再生する（稼働中は終わったばかりの対局を取り込む）
+  // the board replays the newest PGN (picking up games as they finish)
   const latest = d.pgns?.[0]?.name
   if (latest && (latest !== file || d.alive)) await loadGames(latest)
 
-  // パッチの名前・開発者・スカウティングレポートは Fishtest の情報から出す（新しいバッチの最初の対局が終わる前でも分かる）
+  // patch name, author and scouting report come from Fishtest (known even before a new batch's first game ends)
   $("patchLabel").textContent = d.alive ? "Your PC is testing a Stockfish patch" : "Last patch your PC tested"
   loadRun(d.current?.run ?? runFromFile(file))
 }
 
-// ---- 貢献：この PC が担当したテストのうち Stockfish 本体に取り込まれたもの（/impact、10分ごと） ----
+// ---- Contribution: this PC's tests that made it into Stockfish (/impact, every 10 minutes) ----
 const IMPACT_MS = 10 * 60 * 1000
 const loadImpact = async () => {
   let d
@@ -582,11 +591,11 @@ const loadImpact = async () => {
   }
   el.className = "show"
 }
-// 初回は Fishtest への問い合わせが多く時間がかかることがあるので、盤面の更新とは切り離して非同期に
+// the first count can take a while (many Fishtest queries), so it runs separately from the board updates
 loadImpact()
 setInterval(loadImpact, IMPACT_MS)
 
-// ---- パッチの紹介（/runinfo と /briefing）。テストが変わったときだけ取り直す ----
+// ---- Patch introduction (/runinfo and /briefing), re-fetched only when the test changes ----
 const runFromFile = f => (String(f || "").match(/^results-([0-9a-f]{24})-/) || [])[1] || null
 let runShown = null
 let runData = null
@@ -614,20 +623,20 @@ const loadRun = async run => {
   brief = null
   try { runData = await (await fetch(`/runinfo?run=${run}`)).json() } catch {}
   renderPatch()
-  // レポートは初回だけ Ollama で数秒かかる（以降はディスクから）
+  // a report takes a few seconds with Ollama the first time (then it comes from disk)
   try {
     const res = await fetch(`/briefing?run=${run}`)
     if (res.ok && runShown === run) { brief = await res.json(); renderPatch() }
   } catch {}
 }
 
-// ---- 全画面・カーソル・画面スリープ防止 ----
+// ---- Fullscreen, cursor, keeping the screen awake ----
 pickVoice()
 
 document.addEventListener("click", () => {
   // On a phone a tap shouldn't jump into fullscreen (it hides the browser's back button)
   if (!PHONE && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {})
-  // クリックで音声が許可される。次のセリフから話し始める
+  // a click allows audio; speech starts from the next line
   speechBlocked = false
   showNarr()
 })
@@ -642,16 +651,21 @@ document.addEventListener("keydown", e => {
 })
 showNarr()
 let cursorTimer
+const hideHint = () => { $("hint").style.opacity = 0; $("hint").classList.add("gone") }
 document.addEventListener("mousemove", () => {
   document.body.classList.remove("idle-cursor")
   $("hint").style.opacity = 1
+  $("hint").classList.remove("gone")
   clearTimeout(cursorTimer)
-  cursorTimer = setTimeout(() => { document.body.classList.add("idle-cursor"); $("hint").style.opacity = 0 }, 2500)
+  cursorTimer = setTimeout(() => { document.body.classList.add("idle-cursor"); hideHint() }, 2500)
 })
+// Going back to the monitor shouldn't first jump into fullscreen (the page-wide click handler does that)
+$("home").addEventListener("click", e => e.stopPropagation())
+if (PHONE) $("fsHint").remove()
 const keepAwake = async () => { try { await navigator.wakeLock?.request("screen") } catch {} }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") keepAwake() })
 keepAwake()
-setTimeout(() => { $("hint").style.opacity = 0 }, 4000)
+setTimeout(hideHint, 4000)
 
 await refresh()
 setInterval(refresh, POLL_MS)

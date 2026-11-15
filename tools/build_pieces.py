@@ -2,7 +2,7 @@
 
     python tools/build_pieces.py
 
-art/pieces-zach.svg  rook, knight, bishop and pawn for both colours, drawn by Zach (one Figma frame)
+art/pieces.svg       rook, knight, bishop and pawn for both colours, original artwork (one Figma frame)
 art/queen-king.svg   queen and king, in groups named white-queen, white-king, black-queen, black-king
 
 Each piece becomes one 120x120 box with its base on the same line, so pieces of different heights
@@ -13,7 +13,7 @@ import os
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FRAME = os.path.join(ROOT, "art", "pieces-zach.svg")
+FRAME = os.path.join(ROOT, "art", "pieces.svg")
 QK = os.path.join(ROOT, "art", "queen-king.svg")
 TV = os.path.join(ROOT, "tv.html")
 BASELINE = 110.5  # y of every piece's base inside its 120x120 box

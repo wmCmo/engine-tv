@@ -1,9 +1,9 @@
-"""ホーム画面用のアイコン（PNG）を作る。ファビコンと同じ魚を Pillow で描く。
+"""Make the home-screen icons (PNG): the favicon's fish, drawn with Pillow.
 
     python tools/make_icons.py
 
-static/ に icon-192.png・icon-512.png（角丸）、icon-maskable-512.png（全面塗り・Android の切り抜き用）、
-apple-touch-icon.png（180px）を書き出す。
+Writes to static/: icon-192.png and icon-512.png (rounded), icon-maskable-512.png (full bleed, for Android's masks),
+and apple-touch-icon.png (180 px).
 """
 import os
 
@@ -19,20 +19,20 @@ def cubic(p0, p1, p2, p3, n=24):
                   for a, b, c, d in zip(p0, p1, p2, p3)) for t in (i / n for i in range(1, n + 1))]
 
 
-# ファビコンの SVG パス（64 単位）と同じ形：鼻先 → 背中 → 尾びれ → 腹
+# The same shape as the favicon's SVG path (64 units): snout -> back -> tail fin -> belly
 FISH_PATH = ([(7, 32)] + cubic((7, 32), (14, 21), (27, 17), (40, 22))
              + [(54, 13), (54, 51), (40, 42)] + cubic((40, 42), (27, 47), (14, 43), (7, 32)))
 EYE = (18, 29, 3.2)
 
 
 def draw(size, maskable):
-    ss = 4  # 縁をなめらかにするため 4 倍で描いて縮める
+    ss = 4  # draw at 4x and scale down for smooth edges
     big = size * ss
     img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     if maskable:
         d.rectangle([0, 0, big, big], fill=BG)
-        scale, off = big / 64 * 0.72, big * 0.14  # 中央 72% に収める（切り抜かれても欠けない）
+        scale, off = big / 64 * 0.72, big * 0.14  # keep within the central 72% (survives any mask shape)
     else:
         d.rounded_rectangle([0, 0, big - 1, big - 1], radius=big * 14 / 64, fill=BG)
         scale, off = big / 64, 0

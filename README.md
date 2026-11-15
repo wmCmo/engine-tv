@@ -1,94 +1,130 @@
 # fishtest-tv
 
-[Fishtest](https://tests.stockfishchess.org/) のワーカーを動かしている Windows PC 用の、モニター・全画面 TV・スマホのリモコン。
-ワーカー本体（`worker.py`）には手を入れず、ログと Fishtest の公開 API を読むだけ。
+A local dashboard, an across-the-room "TV" view and a phone remote for a [Fishtest](https://tests.stockfishchess.org/)
+worker on Windows. It never modifies the worker: it reads the worker's logs and result files, and Fishtest's and
+GitHub's public APIs.
 
-*A local dashboard, an across-the-room "TV" view with AI football-style commentary, and a phone remote for a Fishtest worker on Windows.*
+## What you get
 
-## できること
+**Monitor** (`http://127.0.0.1:8787/`)
+- Worker status, the current batch's progress and live results (W/L/D, pentanomial, LOS), API response times,
+  a game viewer, and the size of the `testing` folder.
+- **Your contribution**: every test your PC played games for, grouped by what happened to it. Click a tile to list it.
+  - *In Stockfish*: merged into master, matched through the commit message's Fishtest links, or through the
+    `closes …/pull/N` line and that PR's test links and branch.
+  - *Waiting to merge*: passed the long time control, or has an open pull request. Each row says whether there is a PR.
+  - *Still undecided*: the test, or the longer test that followed its STC pass, is still running.
+  - *Other passes* / *Not merged*: first-round passes that went no further, research runs, failures.
+  - An Elo chart of the merged patches, using Fishtest's own estimate from each patch's LTC test.
+- **Watchdog**: if the worker is alive but hasn't reported to Fishtest for 30 minutes, the status shows STUCK and the
+  monitor restarts the worker (at most once an hour; after the PC wakes from sleep it waits a full 30 minutes first).
+  Every action is logged to `tv-cache\watchdog.log`.
 
-- **モニター**（`http://127.0.0.1:8787/`）：ワーカーの状態、いまのバッチの進み具合と戦績、API の応答時間、対局ビューア、テスト用フォルダの容量
-- **貢献カード（トロフィー）**：この PC が対局したテストのうち、Stockfish 本体に取り込まれたもの・合格したもの・判定待ち・不合格の数と CPU 時間
-- **TV**（`/tv`）：部屋の向こうから眺める全画面の盤面。いつも「パッチ側」から見た向きで表示し、全局流し終えたら次の対局を待つ
-  - [Ollama](https://ollama.com/) があれば、対局をサッカー実況風に読み上げる（Edge の英語音声）
-  - テスト対象のコード差分から、テストの中身を説明するスカウティングレポートを作る
-- **スマホのリモコン**（`/remote`）：ワーカーの開始・穏やかな停止、TV のオン・オフ、進み具合の確認。PIN 付き
+**TV** (`/tv`)
+- A fullscreen board to watch from across the room, always oriented from the patch's side, replaying finished games.
+- With [Ollama](https://ollama.com/), football-style commentary read aloud (Edge's English voices), and a "scouting
+  report" that explains what the patch under test changes, written from its code diff.
+- Works on a phone too (`/tv?phone`), without commentary.
 
-## 必要なもの
+**Net explorer** (`/net`)
+- A Figma-style canvas (drag to pan, Ctrl+scroll or pinch to zoom, click to inspect) of Stockfish's current NNUE:
+  input feature sets, feature transformer, layer stacks, with sizes read live from Stockfish's source.
+- **The real weights**: all 1,024 feature-transformer neurons as piece-square heatmaps, read from the master net
+  file your worker already downloaded. Pick a king square, material block and piece; click a neuron to open it.
+- The history of the default net (author, date, LTC Elo) and the latest training experiments on
+  [vondele/nettest](https://github.com/vondele/nettest).
 
-- Windows、PowerShell 5.1 か 7
-- MSYS2（`C:\msys64`）で動く Fishtest ワーカー
-- Python 3.10 以上（標準ライブラリだけ使う）
-- 任意：Ollama（既定のモデルは `qwen3:8b`）、Microsoft Edge（TV 用）、Tailscale（外出先からリモコンを使う場合）
+**Phone remote** (`/remote`, PIN-protected)
+- Start the worker, stop it gracefully, turn the TV on or off, check progress. Installable as a home-screen app.
 
-## 使い方
+## Requirements
 
-ワーカーの場所が `C:\fishtest\worker` でなければ、環境変数 `FISHTEST_WORKER` で指定する。PowerShell のプロファイルに関数を登録しておくと便利:
+- Windows, PowerShell 5.1 or 7
+- A Fishtest worker running under MSYS2 (`C:\msys64`)
+- Python 3.10+ (standard library only)
+- Git (for the merge detection and net explorer: a local copy of Stockfish's history, refreshed daily)
+- Optional: Ollama (default model `qwen3:8b`) for commentary, Microsoft Edge for the TV, Tailscale for the remote
+  away from home
+
+## Usage
+
+If your worker isn't in `C:\fishtest\worker`, set `FISHTEST_WORKER`. A function in your PowerShell profile makes it
+one word:
 
 ```powershell
 function fishtest { & "C:\path\to\fishtest-tv\start-fishtest.ps1" @args }
 ```
 
-| コマンド | 動き |
+| Command | What it does |
 |---|---|
-| `fishtest` | ワーカー・モニター・TV をまとめて起動（動いているものはそのまま）。Ollama のモデルも更新する |
-| `fishtest worker` | ワーカーとモニターだけ |
-| `fishtest tv` / `fishtest tvoff` | TV を開く / 閉じる |
-| `fishtest stop` | ワーカーを穏やかに止める（`fish.exit` を置き、終わった対局を送ってから止まる） |
-| `fishtest remote` | スマホで開く URL と PIN を表示する |
+| `fishtest` | Starts the worker, the monitor and the TV (anything already running is left alone), and updates the Ollama models |
+| `fishtest worker` | Worker and monitor only |
+| `fishtest tv` / `fishtest tvoff` | Opens / closes the TV |
+| `fishtest stop` | Stops the worker gracefully: it places `fish.exit`, so the worker reports its finished games first |
+| `fishtest remote` | Prints the URL and PIN to open on your phone |
 
-モニターだけを手で動かす場合:
+The worker starts **without a window**, with its output in `log.txt` in the worker folder (the previous run's is
+kept as `log.txt.previous`). Twice a worker printing to a terminal tab froze for hours mid-task without ever
+reporting; with no console there is nothing for it to block on. Start it from a normal (not administrator) shell, or
+the monitor won't be able to restart it.
+
+To run only the monitor:
 
 ```powershell
 python monitor.py --host 0.0.0.0 --worker C:\fishtest\worker
 ```
 
-## 設定（環境変数）
+## Settings (environment variables)
 
-| 変数 | 既定 | 意味 |
+| Variable | Default | Meaning |
 |---|---|---|
-| `FISHTEST_WORKER` | `C:\fishtest\worker` | ワーカー本体のフォルダ |
-| `FISHTEST_PYTHON` | PATH 上の `python` | モニターを動かす Python |
-| `MSYS2_ROOT` | `C:\msys64` | MSYS2 の場所 |
-| `NARRATOR_MODEL` / `BRIEF_MODEL` | `qwen3:8b` | 実況・スカウティングレポートに使う Ollama のモデル |
+| `FISHTEST_WORKER` | `C:\fishtest\worker` | The worker's folder |
+| `FISHTEST_PYTHON` | `python` on PATH | The Python that runs the monitor |
+| `MSYS2_ROOT` | `C:\msys64` | Where MSYS2 is installed |
+| `NARRATOR_MODEL` / `BRIEF_MODEL` | `qwen3:8b` | Ollama models for the commentary and scouting reports |
 
-## セキュリティ
+## Network access and security
 
-`start-fishtest.ps1` はスマホから開けるよう、モニターを全インターフェース（`0.0.0.0`）で起動する。
+`start-fishtest.ps1` starts the monitor on all interfaces (`0.0.0.0`) so your phone can reach it.
 
-- この PC（127.0.0.1）以外からは、どのページも PIN でのログインが要る。PIN は初回起動時に `tv-cache\remote-pin.txt` に作られる。消して再起動すると作り直され、全端末がログアウトする
-- PIN を 5 回間違えると 10 分締め出す
-- 操作ボタンの POST は独自ヘッダーが必須で、ほかのサイトから押させることはできない。Host ヘッダーは IP・localhost・`*.ts.net` だけ受け付ける
-- 通信は暗号化されない（http）。ルーターでポートを開けて公開しないこと。外出先から使うなら Tailscale を使い、Windows ファイアウォールでポート 8787 を Tailscale のインターフェースにだけ許可する
+- Every page needs a PIN login except from this PC (127.0.0.1). The PIN is created on first start in
+  `tv-cache\remote-pin.txt`; delete it and restart to make a new one (which logs out every device).
+- Five wrong PINs lock logins for 10 minutes.
+- Action buttons need a custom header, so other websites can't trigger them. Only IP, `localhost` and `*.ts.net`
+  Host headers are accepted.
+- Traffic is plain http. **Don't open the port on your router.** For access away from home use Tailscale, and allow
+  port 8787 in Windows Firewall on the Tailscale interface only.
 
-## スマホのホーム画面に入れる（PWA）
+The monitor contacts tests.stockfishchess.org, api.github.com (a few unauthenticated requests an hour) and
+github.com (a daily `git fetch` of Stockfish's history).
 
-リモコンはホーム画面アプリとして入れられる（アドレスバーのない独立したウィンドウで開く）。
-ブラウザがアプリとして入れてくれるのは HTTPS のページだけなので、Tailscale の HTTPS を使う:
+## Phone home-screen app (PWA)
+
+Browsers only install HTTPS pages as apps, so use Tailscale's HTTPS:
 
 ```powershell
 tailscale serve --bg --https=8443 8787
 ```
 
-`https://<PC の名前>.<tailnet>.ts.net:8443/remote` をスマホで開き、ブラウザのメニューから「ホーム画面に追加」を選ぶ。
-`tailscale serve` 経由の接続も PIN が要る（PC 自身からの接続とは見なさない）。やめるときは `tailscale serve --https=8443 off`。
+Open `https://<pc-name>.<tailnet>.ts.net:8443/remote` on your phone and choose "Add to home screen". Connections
+through `tailscale serve` still need the PIN. To stop: `tailscale serve --https=8443 off`.
 
-既定の 443 番ではなく 8443 番を使うのは、同じ PC の名前（443 番）で別の PWA を入れていると、
-その PWA がアドレス全体を自分のものとして開いてしまうため（ポートが違えば別のサイトとして扱われる）。
-`tailscale serve reset` はほかのアプリの設定まで消すので使わない。
+Port 8443 instead of 443 because an app installed from the same name on port 443 would claim the whole site; a
+different port is a different site. Avoid `tailscale serve reset`, which also removes other apps' settings.
 
-`http://` の URL でもホーム画面には追加できるが、その場合はブラウザのタブで開くショートカットになる。
+Rebuild the icons with `python tools/make_icons.py` (needs Pillow).
 
-アイコンは `python tools/make_icons.py` で作り直せる（Pillow が要る）。
+## Data
 
-## データ
+Runtime data lives in `tv-cache\` (not in git).
 
-実行時のデータは `tv-cache\`（Git の管理外）に置く。
+- `ledger.json`: every test and task this PC worked on. The worker's own logs are overwritten after a few weeks, so
+  **your contribution history exists only in this file**. Don't delete it.
+- `runs\`, `elo\`, `follow-ups.json`, scouting reports: caches of Fishtest data (rebuilt if deleted).
+- `stockfish.git`: Stockfish's history, for merge detection and the net explorer.
+- `watchdog.log`, `remote-actions.log`: what the monitor did on its own or from the remote.
 
-- `ledger.json`：この PC が担当したテストとタスクの記録。ワーカーのログは数週間で上書きされるので、**貢献の履歴はこのファイルにしか残らない**。消さないこと
-- `runs\`・`tasks\`・`<run>.json`：Fishtest の API とスカウティングレポートのキャッシュ（消しても取り直す）
-- `stockfish.git`：取り込み判定用の Stockfish の履歴（1 日 1 回更新）
+## Credits and license
 
-## ライセンス
-
-MIT（[LICENSE](LICENSE)）。ただし `vendor/chess.js` は [chess.js](https://github.com/jhlywa/chess.js)（BSD 2-Clause、著作権表示はファイル冒頭）。
+MIT ([LICENSE](LICENSE)). `vendor/chess.js` is [chess.js](https://github.com/jhlywa/chess.js) (BSD 2-Clause, notice at
+the top of the file). The TV's chess pieces are original artwork (`art/`).
