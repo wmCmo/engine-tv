@@ -31,7 +31,8 @@ STATS_VERSION = 1     # bump when game_stats changes, to rebuild the cache
 
 PAGES = {"/": "index.html", "/index.html": "index.html", "/live": "live.html", "/live.html": "live.html",
          "/pieces": "pieces.html", "/pieces.html": "pieces.html", "/stats": "stats.html", "/stats.html": "stats.html",
-         "/net": "net.html", "/net.html": "net.html", "/mock": "mock.html"}
+         "/net": "net.html", "/net.html": "net.html",
+         "/mock": "stats.html"}  # the design mockup became the dashboard; keep the old link working
 SCRIPTS = {"/board.js": "board.js", "/pieceset.js": "pieceset.js", "/pwa.js": "pwa.js"}
 
 
