@@ -37,7 +37,8 @@ PAGES = {"/": "index.html", "/index.html": "index.html", "/live": "live.html", "
          "/mock": "stats.html"}  # the design mockup became the dashboard; keep the old link working
 # URL -> file; board.js and pieceset.js live in engine-tv/shared (the fishtest TV uses them too)
 SCRIPTS = {"/board.js": SHARED / "board.js", "/pieceset.js": SHARED / "pieceset.js", "/pwa.js": ROOT / "pwa.js",
-           "/shared/board.js": SHARED / "board.js", "/shared/pieceset.js": SHARED / "pieceset.js"}
+           "/shared/board.js": SHARED / "board.js", "/shared/pieceset.js": SHARED / "pieceset.js",
+           "/shared/canvas.js": SHARED / "canvas.js"}
 
 
 # ------------------------------------------------------------------ game store

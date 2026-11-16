@@ -115,7 +115,7 @@ def read_cfg():
 VENDOR = os.path.join(HERE, "vendor")
 # engine-tv/shared: the board component and piece library this app shares with leela/
 SHARED = os.path.join(os.path.dirname(HERE), "shared")
-SHARED_SCRIPT = re.compile(r"/shared/(board\.js|pieceset\.js|theme\.css)")
+SHARED_SCRIPT = re.compile(r"/shared/(board\.js|pieceset\.js|canvas\.js|theme\.css)")
 SHARED_PIECE = re.compile(r"/pieces/([a-z0-9-]+)/([wb][KQRBNP])\.(svg|webp)")
 RESULT_TOKENS = {"1-0", "0-1", "1/2-1/2", "*"}
 PGN_NAME = re.compile(r"^results-[0-9a-f]+-\d+\.pgn$")
