@@ -107,16 +107,16 @@ if ($Mode -eq 'remote') {
 #    - the worker asks Fishtest for the current version at start and while running, and updates and restarts itself
 #    - Stockfish's history (for merge detection) is refreshed when the monitor starts
 #    - Edge and Ollama update themselves
-#    - Ollama models (commentary, scouting reports) don't update themselves, so pull them here.
+#    - the Ollama model for the scouting reports doesn't update itself, so pull it here.
 #      About a second when up to date; a new version can be several GB, so it runs in the background and never delays the TV
-$models = @($env:NARRATOR_MODEL, $env:BRIEF_MODEL, 'qwen3:8b') | Where-Object { $_ } | Select-Object -Unique
+$models = @($env:BRIEF_MODEL, 'qwen3:8b') | Where-Object { $_ } | Select-Object -First 1
 if (Get-Command ollama -ErrorAction SilentlyContinue) {
     foreach ($m in $models) {
         Start-Process -FilePath 'ollama' -ArgumentList @('pull', $m) -WindowStyle Hidden
     }
     Write-Host "  models   checking for updates in the background ($($models -join ', '))" -ForegroundColor Green
 } else {
-    Write-Host '  models   ollama not found; the TV will run without commentary' -ForegroundColor Yellow
+    Write-Host '  models   ollama not found; the TV will run without scouting reports' -ForegroundColor Yellow
 }
 if ($Mode -in 'all', 'worker') {
     Write-Host '  worker   updates itself when it starts (asks Fishtest for the current version)' -ForegroundColor DarkGray
@@ -150,7 +150,7 @@ Start-Monitor
 if ($Mode -eq 'worker') { return }
 
 # 3. TV: open it once the port answers (opening it earlier shows a connection error that needs a reload).
-#    Its own profile means autoplay (the commentary voice) works even while your normal Edge is open
+#    Its own profile keeps the kiosk window separate from your normal Edge
 if (Get-Running 'fishtest-tv-edge' 'msedge.exe') {
     Write-Host '  tv       already open (Alt+F4 closes it)' -ForegroundColor DarkGray
     return

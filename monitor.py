@@ -768,7 +768,7 @@ code{color:var(--green-b);font-family:ui-monospace,Consolas,monospace;font-size:
   <div class="logo">🐟</div>
   <div class="brand"><b>Stockfish</b><small>Worker Monitor</small></div>
   <div class="livewrap"><span id="dot" class="dot off"></span><span id="state">—</span></div>
-  <a class="tvlink" href="/tv" title="The across-the-room view: live board and commentary">📺 TV</a>
+  <a class="tvlink" href="/tv" title="The across-the-room view: live board and scouting report">📺 TV</a>
   <a class="tvlink" href="/net" title="Explore Stockfish's neural network, its history and the latest training experiments">🧠 Net</a>
   <div class="meta" id="meta"></div>
 </header>
@@ -1272,22 +1272,16 @@ $("refreshFiles").addEventListener("click",loadFileList);
 
 
 # ---------------------------------------------------------------------------
-# Commentary (for /tv): take the developer's note from Fishtest, hand the game's key moments to a local Ollama
-# and get a football-style script back: a list of short lines, each tied to a ply.
+# Fishtest and Ollama: the test's details from Fishtest's public API, and the scouting report for /tv
+# (the developer's note and code diff explained by a local Ollama model).
 # ---------------------------------------------------------------------------
 FISHTEST = "https://tests.stockfishchess.org"
 OLLAMA = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
-NARRATOR_MODEL = os.environ.get("NARRATOR_MODEL", "qwen3:8b")
 RUN_ID = re.compile(r"^[0-9a-f]{24}$")
-PGN_RUN = re.compile(r"^results-([0-9a-f]{24})-\d+\.pgn$")
 RUN_TTL_S = 600
-MOMENT_GAP = 12  # minimum plies between lines, so the speech never overlaps
-MAX_LINES = 8
 
 _run_cache = {}  # run -> (fetched at, info)
 _run_lock = threading.Lock()
-_script_cache = {}  # game key -> script
-_script_lock = threading.Lock()
 
 
 def run_info(run):
@@ -1338,48 +1332,7 @@ def run_info(run):
     return info
 
 
-PIECE_WORDS = {"K": "king", "Q": "queen", "R": "rook", "B": "bishop", "N": "knight"}
-SAN_TOKEN = re.compile(r"(?<![\w-])(?:O-O(?:-O)?[+#]?|[KQRBN][a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h]x[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][18]=[QRBN][+#]?|[a-h][1-8][+#])(?!\w)")
-
-
-def san_to_words(san):
-    """A move in words for the speech (Qxd2+ -> queen takes on d2, check)."""
-    tail = ", checkmate" if san.endswith("#") else ", check" if san.endswith("+") else ""
-    core = san.rstrip("+#")
-    if core.startswith("O-O-O"):
-        return "castles queenside" + tail
-    if core.startswith("O-O"):
-        return "castles kingside" + tail
-    promo = ""
-    if "=" in core:
-        core, p = core.split("=", 1)
-        promo = f", promoting to a {PIECE_WORDS.get(p[:1], 'queen')}"
-    piece = PIECE_WORDS.get(core[:1], "pawn")
-    square = core[-2:]
-    verb = "takes on" if "x" in core else "to"
-    return f"{piece} {verb} {square}{promo}{tail}"
-
-
-def situation(ev):
-    """The evaluation from the patch's side (in pawns), in words."""
-    if ev is None:
-        return "unclear"
-    if ev >= 3:
-        return "patch winning"
-    if ev >= 1.2:
-        return "patch clearly better"
-    if ev >= 0.4:
-        return "patch slightly better"
-    if ev > -0.4:
-        return "level"
-    if ev > -1.2:
-        return "master slightly better"
-    if ev > -3:
-        return "master clearly better"
-    return "master winning"
-
-
-BRIEF_MODEL = os.environ.get("BRIEF_MODEL", NARRATOR_MODEL)
+BRIEF_MODEL = os.environ.get("BRIEF_MODEL", "qwen3:8b")
 BRIEF_DIR = os.path.join(HERE, "tv-cache")
 DIFF_MAX = 30_000
 _brief_cache = {}
@@ -1449,7 +1402,7 @@ def briefing(run):
         try:
             with open(path, encoding="utf-8") as f:
                 brief = json.load(f)
-                # Even for a saved report, rewrite the success wording with the current definition (the commentary uses it)
+                # Even for a saved report, rewrite the success wording with the current definition
                 brief["stakes"] = STAKES.get(brief.get("kind"), brief.get("stakes"))
                 _brief_cache[run] = brief
                 return brief
@@ -1495,191 +1448,6 @@ def briefing(run):
             pass
         _brief_cache[run] = brief
         return brief
-
-
-def key_moments(game, patch_white):
-    """Plies that get a line: the start, the biggest evaluation swings (up to 5, spaced out), and the last move."""
-    evals, sans = game.get("evals") or [], game.get("sans") or []
-    n = len(sans)
-    if n == 0:
-        return []
-    sign = 1 if patch_white else -1  # make every evaluation relative to the patch's side
-    swings = []
-    prev = evals[0] if evals and evals[0] is not None else 0.0
-    for i in range(1, min(n, len(evals))):
-        cur = evals[i] if evals[i] is not None else prev
-        swings.append((abs(cur - prev), i, prev, cur))
-        prev = cur
-    picked = [0]
-    for _, i, _, _ in sorted(swings, reverse=True):
-        if len(picked) >= 6:
-            break
-        if i < n - 1 and all(abs(i - p) >= MOMENT_GAP for p in picked + [n - 1]):
-            picked.append(i)
-    picked.append(n - 1)
-    fen = str(game.get("fen") or "")
-    white_first = len(fen.split()) < 2 or fen.split()[1] != "b"
-    out = []
-    for ply in sorted(set(picked)):
-        ev = evals[ply] if ply < len(evals) and evals[ply] is not None else None
-        before = evals[ply - 1] if 0 < ply <= len(evals) and evals[ply - 1] is not None else None
-        mover_white = (ply % 2 == 0) == white_first
-        out.append({
-            "ply": ply,
-            "move": sans[ply],
-            "spoken": san_to_words(sans[ply]),
-            "by": "the patch" if mover_white == patch_white else "master",
-            "before": situation(None if before is None else sign * before),
-            "after": situation(None if ev is None else sign * ev),
-        })
-    return out
-
-
-NARRATOR_SYSTEM = (
-    "You are a British football TV commentator, live on air. Tonight's match is a chess game between two "
-    "versions of the Stockfish chess engine, and you call it exactly like a football match: kick-off, midfield "
-    "battle, counter-attack, pressure on the box, the dressing room, the gaffer's tactical change. Energetic, "
-    "witty, short punchy sentences, and vary your phrasing from line to line. Football metaphors map naturally: a "
-    "capture is a crunching tackle, a check is a shot on target, checkmate is the winning goal, a promotion is a "
-    "super-sub coming on, castling is shoring up the defence. Every line is read aloud by text-to-speech, so: no "
-    "emojis, no stage directions, no markdown, never chess notation (say the moves exactly as given in words), and "
-    "never read out evaluation numbers. Only state chess facts you were given; do not invent moves or scores."
-)
-
-
-def build_prompt(game, info, moments, patch_white, brief=None):
-    branch = (info or {}).get("branch") or "the patch"
-    author = (info or {}).get("author") or "a developer"
-    note = (info or {}).get("note") or "an unnamed tweak"
-    scouting = (
-        f" Scouting report on the change: {brief['explain']} {brief['analogy']} What is at stake: {brief['stakes']}"
-        if brief and brief.get("explain") else ""
-    )
-    lines = [
-        f"Home side: \"{branch}\", a modified Stockfish built by developer {author}. "
-        f"The manager's tactical change, in the developer's own words: \"{note}\".{scouting}",
-        "Away side: Stockfish master, the current official version.",
-        f"The patch plays {'white' if patch_white else 'black'}.",
-    ]
-    if info and info.get("wins") is not None:
-        lines.append(
-            f"Season so far across all volunteer computers: patch {info['wins']} wins, master {info['losses']} wins, "
-            f"{info['draws']} draws."
-        )
-    if info and info.get("llr") is not None and info.get("llr_upper"):
-        pct = round(100 * info["llr"] / info["llr_upper"])
-        lines.append(
-            f"The statistical test needs to reach 100% to promote the patch; it currently stands at {pct}%."
-        )
-    lines.append("The game starts from a prepared opening position, as every test game does.")
-    result = game.get("result")
-    if result == "1/2-1/2":
-        outcome = "a draw"
-    elif result in ("1-0", "0-1"):
-        outcome = "the patch WINS" if (result == "1-0") == patch_white else "master WINS (the patch loses)"
-    else:
-        outcome = "unfinished"
-    lines.append("Key moments (ply index; who moved; the move in words; the state of the game before and after):")
-    for i, m in enumerate(moments):
-        final = f" FINAL WHISTLE: this is the last move, the result is {outcome}; say so clearly." if i == len(moments) - 1 else ""
-        lines.append(f"- ply {m['ply']}: {m['by']} plays {m['spoken']}. Before: {m['before']}. After: {m['after']}.{final}")
-    lines.append(f"Final result: {outcome}. Do not mention move counts, plies, stalemate or how the game was adjudicated.")
-    lines.append(
-        "Write one commentary line for EACH key moment, using exactly those ply numbers. The ply 0 line is the "
-        "kick-off: welcome viewers and explain the manager's tactical change in plain words, based on the scouting "
-        "report, and say what counts as success. The last line reacts "
-        "to the final result. Each line 12 to 30 words. Reply as JSON: {\"lines\": [{\"ply\": number, \"text\": string}]}."
-    )
-    return "\n".join(lines)
-
-
-SCRIPT_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "lines": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {"ply": {"type": "integer"}, "text": {"type": "string"}},
-                "required": ["ply", "text"],
-            },
-        }
-    },
-    "required": ["lines"],
-}
-
-
-def commentary(file, game):
-    """The commentary script for one game. Cached after the first time."""
-    m = PGN_RUN.match(file or "")
-    sans = game.get("sans") if isinstance(game, dict) else None
-    if not m or not isinstance(sans, list) or not sans:
-        return {"error": "bad request"}
-    key = "|".join([file, str(game.get("white")), str(game.get("fen")), str(len(sans)), str(game.get("result"))])
-    with _script_lock:
-        if key in _script_cache:
-            return _script_cache[key]
-    patch_white = str(game.get("white", "")).startswith("New")
-    info = run_info(m.group(1))
-    brief = briefing(m.group(1))
-    moments = key_moments(game, patch_white)
-    body = {
-        "model": NARRATOR_MODEL,
-        "stream": False,
-        "think": False,
-        "format": "json",
-        "options": {"temperature": 0.9, "num_predict": 900},
-        "messages": [
-            {"role": "system", "content": NARRATOR_SYSTEM},
-            {"role": "user", "content": build_prompt(game, info, moments, patch_white, brief)},
-        ],
-    }
-    started = time.time()
-    try:
-        req = urllib.request.Request(
-            f"{OLLAMA}/api/chat", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=60) as r:
-            content = json.load(r)["message"]["content"]
-        raw = json.loads(content).get("lines", [])
-    except (OSError, ValueError, KeyError) as e:
-        return {"error": f"ollama: {e}"}
-    # Validate the model's answer: lines only on the chosen plies, overlong sentences cut
-    allowed = {mo["ply"] for mo in moments}
-    lines = []
-    for item in raw:
-        try:
-            ply = int(item["ply"])
-            text = re.sub(r"\s+", " ", str(item["text"])).strip()
-            text = SAN_TOKEN.sub(lambda mt: san_to_words(mt.group(0)), text)
-        except (KeyError, TypeError, ValueError):
-            continue
-        if ply in allowed and text and ply not in {x["ply"] for x in lines}:
-            lines.append({"ply": ply, "text": text[:280]})
-    lines.sort(key=lambda x: x["ply"])
-    # If the last line doesn't state the result clearly, add a fixed full-time line (this part is never left to the model)
-    last_ply = len(sans) - 1
-    result = game.get("result")
-    if result == "1/2-1/2":
-        whistle, words = "And that's full time. Honours even, it's a draw!", ("draw", "honours even", "share the points")
-    elif result in ("1-0", "0-1"):
-        if (result == "1-0") == patch_white:
-            whistle, words = "Full time! The patch takes all three points!", ("patch wins", "patch takes", "victory for the patch", "patch has won")
-        else:
-            whistle, words = "Full time, and master takes the points. Back to the drawing board for the patch.", ("master wins", "master takes", "patch loses", "defeat")
-    else:
-        whistle, words = "", ()
-    if whistle:
-        final = next((x for x in lines if x["ply"] == last_ply), None)
-        if final is None:
-            lines.append({"ply": last_ply, "text": whistle})
-        elif not any(w in final["text"].lower() for w in words):
-            final["text"] = f"{final['text']} {whistle}"
-    script = {"lines": lines[:MAX_LINES], "model": NARRATOR_MODEL, "seconds": round(time.time() - started, 1),
-              "branch": (info or {}).get("branch")}
-    with _script_lock:
-        _script_cache[key] = script
-    return script
 
 
 # ---------------------------------------------------------------------------
@@ -2822,23 +2590,7 @@ class Handler(BaseHTTPRequestHandler):
         if route in ("/remote/login", "/remote/action"):
             self._remote_post(route)
             return
-        if not self._remote_ok():
-            self.send_error(401)
-            return
-        # Generate a commentary script. /tv sends the game exactly as it got it from /games
-        if route != "/commentary":
-            self.send_error(404)
-            return
-        length = int(self.headers.get("Content-Length") or 0)
-        if length <= 0 or length > 2_000_000:
-            self.send_error(413, "bad size")
-            return
-        try:
-            payload = json.loads(self.rfile.read(length))
-        except ValueError:
-            self.send_error(400, "bad json")
-            return
-        self._send(json.dumps(commentary(payload.get("file"), payload.get("game") or {})), "application/json")
+        self.send_error(404)
 
     def _remote_post(self, route):
         # Refuse POSTs without the custom header, so another site can't trigger them through this PC's browser

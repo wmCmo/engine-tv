@@ -22,9 +22,11 @@ GitHub's public APIs.
 
 **TV** (`/tv`)
 - A fullscreen board to watch from across the room, always oriented from the patch's side, replaying finished games.
-- With [Ollama](https://ollama.com/), football-style commentary read aloud (Edge's English voices), and a "scouting
-  report" that explains what the patch under test changes, written from its code diff.
-- Works on a phone too (`/tv?phone`), without commentary.
+- With [Ollama](https://ollama.com/), a "scouting report" that explains what the patch under test changes, written
+  from its code diff.
+- Works on a phone too (`/tv?phone`).
+- The TV used to have football-style spoken commentary; it was removed. `git checkout with-narration` brings back the
+  last version that had it.
 
 **Net explorer** (`/net`)
 - A Figma-style canvas (drag to pan, Ctrl+scroll or pinch to zoom, click to inspect) of Stockfish's current NNUE:
@@ -43,7 +45,7 @@ GitHub's public APIs.
 - A Fishtest worker running under MSYS2 (`C:\msys64`)
 - Python 3.10+ (standard library only)
 - Git (for the merge detection and net explorer: a local copy of Stockfish's history, refreshed daily)
-- Optional: Ollama (default model `qwen3:8b`) for commentary, Microsoft Edge for the TV, Tailscale for the remote
+- Optional: Ollama (default model `qwen3:8b`) for the scouting reports, Microsoft Edge for the TV, Tailscale for the remote
   away from home
 
 ## Usage
@@ -81,7 +83,7 @@ python monitor.py --host 0.0.0.0 --worker C:\fishtest\worker
 | `FISHTEST_WORKER` | `C:\fishtest\worker` | The worker's folder |
 | `FISHTEST_PYTHON` | `python` on PATH | The Python that runs the monitor |
 | `MSYS2_ROOT` | `C:\msys64` | Where MSYS2 is installed |
-| `NARRATOR_MODEL` / `BRIEF_MODEL` | `qwen3:8b` | Ollama models for the commentary and scouting reports |
+| `BRIEF_MODEL` | `qwen3:8b` | Ollama model for the scouting reports |
 
 ## Network access and security
 
