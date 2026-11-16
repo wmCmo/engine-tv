@@ -7,8 +7,7 @@ Apache, CC BY, CC BY-SA, CC BY-NC-SA, or freeware for personal use).
 
 Who uses what:
 - **leela/** serves every set at `/pieces/<set>/<piece>` for the boards and the Pieces gallery, and lets you pick one.
-- **fishtest/** embeds **Staunty** (by sadsnake1, [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/))
-  into its TV page with `fishtest/tools/build_pieces.py`. That licence also covers the embedded copy in
-  `fishtest/tv.html`.
+- **fishtest/** shows **Staunty** (by sadsnake1, [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/))
+  on its TV, served from here by `monitor.py` and drawn with the shared board (`shared/board.js`).
 
 `python shared/fetch_pieces.py` re-downloads any missing set. Sets that lila lists without a licence aren't included.

@@ -113,6 +113,10 @@ def read_cfg():
 
 
 VENDOR = os.path.join(HERE, "vendor")
+# engine-tv/shared: the board component and piece library this app shares with leela/
+SHARED = os.path.join(os.path.dirname(HERE), "shared")
+SHARED_SCRIPT = re.compile(r"/shared/(board|pieceset)\.js")
+SHARED_PIECE = re.compile(r"/pieces/([a-z0-9-]+)/([wb][KQRBNP])\.(svg|webp)")
 RESULT_TOKENS = {"1-0", "0-1", "1/2-1/2", "*"}
 PGN_NAME = re.compile(r"^results-[0-9a-f]+-\d+\.pgn$")
 
@@ -2578,6 +2582,20 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(f.read(), "text/javascript; charset=utf-8")
             except OSError:
                 self.send_error(404, "chess.js not vendored")
+        elif SHARED_SCRIPT.fullmatch(route) or SHARED_PIECE.fullmatch(route):
+            # the shared board component and pieces (engine-tv/shared), read from disk like the TV
+            m = SHARED_SCRIPT.fullmatch(route)
+            if m:
+                path, ctype = os.path.join(SHARED, f"{m.group(1)}.js"), "text/javascript; charset=utf-8"
+            else:
+                m = SHARED_PIECE.fullmatch(route)
+                path = os.path.join(SHARED, "pieces", m.group(1), f"{m.group(2)}.{m.group(3)}")
+                ctype = "image/svg+xml" if m.group(3) == "svg" else "image/webp"
+            try:
+                with open(path, "rb") as f:
+                    self._send(f.read(), ctype)
+            except OSError:
+                self.send_error(404)
         else:
             self._send(PAGE, "text/html; charset=utf-8")
 

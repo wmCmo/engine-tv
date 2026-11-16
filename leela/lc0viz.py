@@ -35,7 +35,9 @@ PAGES = {"/": "index.html", "/index.html": "index.html", "/live": "live.html", "
          "/pieces": "pieces.html", "/pieces.html": "pieces.html", "/stats": "stats.html", "/stats.html": "stats.html",
          "/net": "net.html", "/net.html": "net.html",
          "/mock": "stats.html"}  # the design mockup became the dashboard; keep the old link working
-SCRIPTS = {"/board.js": "board.js", "/pieceset.js": "pieceset.js", "/pwa.js": "pwa.js"}
+# URL -> file; board.js and pieceset.js live in engine-tv/shared (the fishtest TV uses them too)
+SCRIPTS = {"/board.js": SHARED / "board.js", "/pieceset.js": SHARED / "pieceset.js", "/pwa.js": ROOT / "pwa.js",
+           "/shared/board.js": SHARED / "board.js", "/shared/pieceset.js": SHARED / "pieceset.js"}
 
 
 # ------------------------------------------------------------------ game store
@@ -418,7 +420,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in PAGES:
             return self._send((ROOT / PAGES[path]).read_bytes(), "text/html; charset=utf-8")
         if path in SCRIPTS:
-            return self._send((ROOT / SCRIPTS[path]).read_bytes(), "text/javascript; charset=utf-8")
+            return self._send(SCRIPTS[path].read_bytes(), "text/javascript; charset=utf-8")
         m = re.fullmatch(r"/pieces/([a-z0-9-]+)/([wb][KQRBNP])\.(svg|webp)", path)
         if m:
             f = PIECES / m.group(1) / f"{m.group(2)}.{m.group(3)}"
