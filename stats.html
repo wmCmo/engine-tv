@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#21201d">
+<script src="/pwa.js"></script>
+<title>Lc0 Dashboard</title>
+<style>
+:root {
+  --bg: #312e2b; --panel: #262421; --panel-2: #21201d; --panel-hover: #2f2d2a; --line: #3c3a37;
+  --text: #fff; --text-2: #bababa; --text-3: #8b8987;
+  --green: #81b64c; --green-dark: #45753c;
+  --s-train: #3987e5; --s-match: #d95926;   /* categorical slots 1-2, validated on #262421 */
+  --grid: #34322f; --axis: #4a4744;
+  --res-w: #ffffff; --res-d: #8b8987; --res-b: #151412;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI", system-ui, -apple-system, Arial, sans-serif; overflow-x: hidden; }
+a { color: inherit; }
+.topbar { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: var(--panel-2); border-bottom: 1px solid #1a1917; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; }
+.brand img { width: 28px; height: 28px; }
+.nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.nav a { padding: 6px 12px; border-radius: 5px; font-weight: 700; color: var(--text-2); text-decoration: none; }
+.nav a:hover { background: var(--panel-hover); color: #fff; }
+.nav a.on { background: var(--panel); color: #fff; box-shadow: inset 0 -2px 0 var(--green); }
+.updated { margin-left: auto; color: var(--text-3); font-size: 12px; font-weight: 600; }
+/* pause / resume the training client (works from the phone app too) */
+.ctl { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 99px; padding: 8px 16px 8px 12px;
+  font: inherit; font-weight: 800; font-size: 14px; cursor: pointer; color: #fff; background: var(--panel); min-height: 38px; }
+.ctl i { width: 9px; height: 9px; border-radius: 50%; background: var(--text-3); }
+.ctl.running { background: var(--green-dark); } .ctl.running i { background: #b6e38a; box-shadow: 0 0 0 3px rgba(129,182,76,.35); }
+.ctl.paused { background: #5a2b2b; } .ctl.paused i { background: #e8a0a0; }
+.ctl:disabled { opacity: .6; cursor: default; }
+
+.wrap { max-width: 1500px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.panel { background: var(--panel); border-radius: 8px; padding: 14px 16px 16px; min-width: 0; position: relative; }
+.panel h2 { margin: 0 0 2px; font-size: 15px; font-weight: 800; }
+.panel .sub { color: var(--text-3); font-size: 12px; margin-bottom: 10px; }
+.c12 { grid-column: span 12; } .c8 { grid-column: span 8; } .c6 { grid-column: span 6; } .c4 { grid-column: span 4; } .c3 { grid-column: span 3; }
+@media (max-width: 1100px) { .c8, .c6, .c4 { grid-column: span 12; } .c3 { grid-column: span 6; } }
+@media (max-width: 600px) { .c3 { grid-column: span 12; } }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; grid-column: span 12; }
+.kpi { background: var(--panel); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+.kpi .k { font-size: 11px; color: var(--text-3); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+a.kpi.link { display: block; color: inherit; text-decoration: none; cursor: pointer; }
+a.kpi.link:hover { background: var(--panel-hover); }
+a.kpi.link:active { transform: translateY(1px); }
+.kpi .ext { color: var(--text-2); }
+.kpi .v { font-size: 28px; font-weight: 800; line-height: 1.15; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .v small { font-size: 14px; color: var(--text-2); font-weight: 700; }
+.kpi .s { font-size: 12px; color: var(--text-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .s b { color: #fff; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 800; vertical-align: 4px; }
+.pill.training { background: var(--s-train); } .pill.match { background: var(--s-match); }
+.pill.off { background: #5a2b2b; }
+
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { fill: var(--text-3); font-size: 11px; font-family: inherit; }
+.tip { position: absolute; pointer-events: none; background: #1b1a18; color: #fff; border-radius: 6px; padding: 7px 10px; font-size: 12px;
+  white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.45); display: none; z-index: 10; line-height: 1.5; }
+.tip b { font-variant-numeric: tabular-nums; }
+.tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 5px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 2px; margin-top: 12px; }
+.stats div { background: var(--panel-2); padding: 8px 10px; border-radius: 4px; }
+.stats .k { font-size: 10px; color: var(--text-3); text-transform: uppercase; font-weight: 700; letter-spacing: .4px; }
+.stats .v { font-weight: 800; font-size: 15px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--text-3); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 7px 8px; border-bottom: 1px solid #2e2c29; font-variant-numeric: tabular-nums; }
+td.num, th.num { text-align: right; }
+tr.link { cursor: pointer; } tr.link:hover td { background: var(--panel-hover); }
+.mode-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+
+.resrow { display: grid; grid-template-columns: 80px 1fr 60px; gap: 10px; align-items: center; margin: 10px 0; }
+.resrow .lab { font-weight: 700; font-size: 13px; }
+.resbar { display: flex; height: 26px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--panel); }
+.resbar span { display: grid; place-items: center; font-size: 12px; font-weight: 800; min-width: 0; overflow: hidden; }
+.resrow .n { color: var(--text-3); font-size: 12px; text-align: right; }
+
+.hbar { display: grid; grid-template-columns: 70px 1fr 64px; gap: 8px; align-items: center; margin: 6px 0; font-size: 13px; }
+.hbar .track { height: 12px; background: #2e2c29; border-radius: 3px; overflow: hidden; }
+.hbar .fill { height: 100%; border-radius: 3px; background: var(--green); }
+.hbar .val { text-align: right; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.heat { display: grid; grid-template-columns: 16px repeat(8, 1fr); gap: 2px; max-width: 360px; }
+.heat div { aspect-ratio: 1; border-radius: 2px; position: relative; }
+.heat .lab { aspect-ratio: auto; display: grid; place-items: center; color: var(--text-3); font-size: 11px; }
+.heat-scale { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-3); margin-top: 8px; max-width: 360px; }
+.heat-scale .ramp { flex: 1; height: 8px; border-radius: 3px; }
+.loading { grid-column: span 12; text-align: center; color: var(--text-3); padding: 40px; }
+.note { color: var(--text-3); font-size: 12px; margin-top: 8px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 700px) { .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="/pieces/cburnett/wN.svg" alt=""> Lc0 Live</div>
+  <nav class="nav"><a href="/live">Live boards</a><a href="/">Analysis</a><a href="/net">Net</a><a href="/stats" class="on">Dashboard</a><a href="/pieces">Pieces</a></nav>
+  <button class="ctl" id="clientBtn" disabled><i></i><span>checking…</span></button>
+  <span class="updated" id="updated">loading…</span>
+</header>
+
+<main class="wrap" id="app">
+  <div class="kpis" id="kpis"></div>
+
+  <section class="panel c8">
+    <h2>Throughput</h2><div class="sub">Games finished per 10 minutes, last 24 hours</div>
+    <div class="legend" id="tpLegend"></div>
+    <div class="chart" id="tpChart"></div>
+  </section>
+  <section class="panel c4">
+    <h2>Results</h2><div class="sub">White win · draw · black win</div>
+    <div id="results"></div>
+    <h2 style="margin-top:16px">Draw rate by hour</h2>
+    <div class="chart" id="drawChart"></div>
+  </section>
+
+  <section class="panel c12">
+    <h2>GPU</h2><div class="sub" id="gpuSub">Sampled every 10 s, last 6 hours</div>
+    <div class="two" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+      <div><div class="legend"><span>Utilisation (%)</span></div><div class="chart" id="gUtil"></div></div>
+      <div><div class="legend"><span>Temperature (°C)</span></div><div class="chart" id="gTemp"></div></div>
+      <div><div class="legend"><span>Power (W)</span></div><div class="chart" id="gPower"></div></div>
+    </div>
+    <div class="stats" id="gpuStats"></div>
+  </section>
+
+  <section class="panel c6">
+    <h2>Game length</h2><div class="sub">Games by length in plies (10-ply bins)</div>
+    <div class="legend" id="lenLegend"></div>
+    <div class="chart" id="lenChart"></div>
+    <div class="stats" id="lenStats"></div>
+  </section>
+  <section class="panel c6">
+    <h2>How Leela searches</h2><div class="sub">Per-move averages, by game type</div>
+    <table id="searchTable"></table>
+    <p class="note">“Top-move share”: fraction of the 800 visits spent on the move the search liked most. “Off-best”: moves played that weren’t the search’s best, which is the training temperature at work (match games play at temperature 0).</p>
+  </section>
+
+  <section class="panel c4">
+    <h2>Value head calibration</h2><div class="sub">Predicted vs actual score, side to move</div>
+    <div class="chart" id="calChart"></div>
+    <p class="note">Each dot is a bucket of positions. On the diagonal means Leela’s evaluation matches how those games actually ended.</p>
+  </section>
+  <section class="panel c4">
+    <h2>Draw head calibration</h2><div class="sub">Predicted draw chance vs actual draw rate</div>
+    <div class="chart" id="drawCalChart"></div>
+    <p class="note">Same idea for the D in W/D/L: how often a position Leela called “X% drawish” ended in a draw.</p>
+  </section>
+  <section class="panel c4">
+    <h2>Moves-left head</h2><div class="sub">Average prediction error by plies actually remaining</div>
+    <div class="legend"><span><i style="background:var(--green)"></i>Mean absolute error</span><span><i style="background:#f7c631;border-radius:50%"></i>Bias (+ = predicts longer)</span></div>
+    <div class="chart" id="mlChart"></div>
+  </section>
+
+  <section class="panel c4">
+    <h2>Where pieces land</h2><div class="sub">Destination squares of every move played</div>
+    <div class="heat" id="heat"></div>
+    <div class="heat-scale"><span>fewer</span><div class="ramp" id="heatRamp"></div><span>more</span></div>
+  </section>
+  <section class="panel c4">
+    <h2>Move habits</h2><div class="sub">Share of moves by piece</div>
+    <div id="pieceBars"></div>
+    <h2 style="margin-top:14px">Castling</h2><div class="sub">Share of games where each side castled</div>
+    <div id="castleBars"></div>
+  </section>
+  <section class="panel c4">
+    <h2>Promotions</h2><div class="sub">Every promotion, by piece</div>
+    <div id="promoBars"></div>
+    <h2 style="margin-top:14px">Underpromotions</h2><div class="sub">Latest games where a pawn became something other than a queen</div>
+    <table id="underTable"></table>
+  </section>
+
+  <section class="panel c6">
+    <h2>First moves</h2><div class="sub">Training games from the starting position: what Leela opened with, and how White scored</div>
+    <table id="firstTable"></table>
+  </section>
+  <section class="panel c6">
+    <h2>Records</h2><div class="sub">Click a row to open the game in Analysis</div>
+    <table id="recordTable"></table>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const COL = { training: "var(--s-train)", match: "var(--s-match)" };
+const MODES = ["training", "match"];
+const fmtInt = n => n == null ? "–" : Math.round(n).toLocaleString();
+const fmt1 = n => n == null ? "–" : n.toFixed(1);
+const pct = (n, d = 0) => n == null ? "–" : (n * 100).toFixed(d) + "%";
+const dur = s => { if (!s || s < 0) return "–"; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? `${h}h ${m}m` : `${m}m`; };
+const hhmm = t => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const gameName = g => g.replace("game_", "#").replace(/#0+(\d)/, "#$1");
+let D = null;
+
+// ---------------------------------------------------------------- chart helpers
+function frame(el, h, pad = { l: 40, r: 10, t: 8, b: 24 }) {
+  const w = Math.max(240, el.clientWidth || 400);
+  el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" height="${h}"></svg><div class="tip"></div>`;
+  return { svg: el.querySelector("svg"), tip: el.querySelector(".tip"), w, h, pad, iw: w - pad.l - pad.r, ih: h - pad.t - pad.b };
+}
+function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p; return 10 * p; }
+function yAxis(f, max, ticks = 4, fmt = v => v, min = 0) {
+  let s = "";
+  for (let i = 0; i <= ticks; i++) {
+    const v = min + (max - min) * i / ticks, y = f.pad.t + f.ih - (v - min) / (max - min) * f.ih;
+    s += `<line x1="${f.pad.l}" x2="${f.w - f.pad.r}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="1"/>
+          <text x="${f.pad.l - 6}" y="${y + 4}" text-anchor="end">${fmt(v)}</text>`;
+  }
+  return s;
+}
+function showTip(f, html, x, y) {
+  f.tip.innerHTML = html; f.tip.style.display = "block";
+  let left = x + 14; if (left + f.tip.offsetWidth > f.w) left = x - f.tip.offsetWidth - 14;
+  f.tip.style.left = Math.max(0, left) + "px"; f.tip.style.top = Math.max(0, y - 10) + "px";
+}
+function hideTip(f) { f.tip.style.display = "none"; }
+
+// stacked bars: labels[], series [{name,color,values}]
+function stackedBars(el, { labels, series, h = 220, xTick, tipTitle, yFmt = v => v }) {
+  const f = frame(el, h);
+  const n = labels.length, totals = labels.map((_, i) => series.reduce((a, s) => a + s.values[i], 0));
+  const max = niceMax(Math.max(1, ...totals));
+  const bw = f.iw / n, gap = Math.min(2, bw * 0.25);
+  let s = yAxis(f, max, 4, yFmt);
+  labels.forEach((lab, i) => {
+    let y0 = f.pad.t + f.ih;
+    const x = f.pad.l + i * bw + gap / 2, w = Math.max(1, bw - gap);
+    series.forEach((se, k) => {
+      const v = se.values[i]; if (!v) return;
+      const hh = v / max * f.ih, top = k === series.length - 1 || series.slice(k + 1).every(o => !o.values[i]);
+      const r = top ? Math.min(3, w / 2) : 0;
+      // segments separated by a 2px surface gap; rounded data-end only on the top segment
+      const yy = y0 - hh, hEff = Math.max(0, hh - (y0 < f.pad.t + f.ih ? 2 : 0));
+      s += top && r ? `<path d="M${x},${y0 - (y0 < f.pad.t + f.ih ? 2 : 0)} V${yy + r} Q${x},${yy} ${x + r},${yy} H${x + w - r} Q${x + w},${yy} ${x + w},${yy + r} V${y0 - (y0 < f.pad.t + f.ih ? 2 : 0)} Z" fill="${se.color}"/>`
+        : `<rect x="${x}" y="${yy}" width="${w}" height="${hEff}" fill="${se.color}"/>`;
+      y0 = yy;
+    });
+    if (xTick) { const t = xTick(lab, i); if (t) s += `<text x="${x + w / 2}" y="${f.h - 6}" text-anchor="middle">${t}</text>`; }
+  });
+  s += `<line x1="${f.pad.l}" x2="${f.w - f.pad.r}" y1="${f.pad.t + f.ih}" y2="${f.pad.t + f.ih}" stroke="var(--axis)"/>
+        <rect id="hov" x="0" y="${f.pad.t}" width="${bw}" height="${f.ih}" fill="#fff" opacity="0"/>`;
+  f.svg.innerHTML = s;
+  const hov = f.svg.querySelector("#hov");
+  f.svg.onmousemove = ev => {
+    const r = f.svg.getBoundingClientRect(), x = (ev.clientX - r.left) * f.w / r.width;
+    const i = Math.floor((x - f.pad.l) / bw); if (i < 0 || i >= n) { hideTip(f); hov.setAttribute("opacity", 0); return; }
+    hov.setAttribute("x", f.pad.l + i * bw); hov.setAttribute("opacity", .06);
+    showTip(f, `${tipTitle(labels[i], i)}<br>` + series.map(se => `<i style="background:${se.color}"></i>${se.name}: <b>${se.values[i]}</b>`).join("<br>")
+      + (series.length > 1 ? `<br>Total: <b>${totals[i]}</b>` : ""), x * r.width / f.w, ev.clientY - r.top);
+  };
+  f.svg.onmouseleave = () => { hideTip(f); hov.setAttribute("opacity", 0); };
+}
+
+// single-series line over time: pts [[t, v]]
+// gap: seconds between samples beyond which the line breaks (missing data); dots: mark every point
+function lineChart(el, { pts, color = "var(--green)", h = 150, min = 0, max, fmt = v => v, unit = "", gap = 90, dots = false, tipX = hhmm }) {
+  const f = frame(el, h, { l: 36, r: 8, t: 8, b: 22 });
+  if (pts.length < 2) { f.svg.innerHTML = `<text x="${f.w / 2}" y="${h / 2}" text-anchor="middle">${pts.length ? "needs a second hour of data…" : "collecting samples…"}</text>`; return; }
+  const t0 = pts[0][0], t1 = pts[pts.length - 1][0];
+  max = max ?? niceMax(Math.max(...pts.map(p => p[1] ?? 0)) * 1.1);
+  const X = t => f.pad.l + (t - t0) / Math.max(1, t1 - t0) * f.iw, Y = v => f.pad.t + f.ih - (v - min) / (max - min) * f.ih;
+  let d = "", started = false, prev = null;
+  for (const [t, v] of pts) {
+    if (v == null || (prev && t - prev > gap)) { started = false; }
+    if (v != null) { d += (started ? "L" : "M") + X(t).toFixed(1) + "," + Y(v).toFixed(1) + " "; started = true; }
+    prev = t;
+  }
+  let s = yAxis(f, max, 3, fmt, min);
+  // smallest time step whose labels stay at least ~52 px apart (phones are narrow)
+  const span = Math.max(1, t1 - t0);
+  const step = [600, 1800, 3600, 7200, 10800, 21600, 43200].find(st => st / span * f.iw >= 52) || 86400;
+  for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) s += `<text x="${X(t)}" y="${h - 5}" text-anchor="middle">${hhmm(t)}</text>`;
+  s += `<path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`;
+  if (dots) for (const [t, v] of pts) if (v != null) s += `<circle cx="${X(t)}" cy="${Y(v)}" r="4" fill="${color}" stroke="var(--panel)" stroke-width="2"/>`;
+  s += `<line id="cx" y1="${f.pad.t}" y2="${f.pad.t + f.ih}" stroke="#bababa" opacity="0"/><circle id="cd" r="4" fill="${color}" stroke="var(--panel)" stroke-width="2" opacity="0"/>`;
+  f.svg.innerHTML = s;
+  const cx = f.svg.querySelector("#cx"), cd = f.svg.querySelector("#cd");
+  f.svg.onmousemove = ev => {
+    const r = f.svg.getBoundingClientRect(), x = (ev.clientX - r.left) * f.w / r.width;
+    const t = t0 + (x - f.pad.l) / f.iw * (t1 - t0);
+    let best = pts[0]; for (const p of pts) if (Math.abs(p[0] - t) < Math.abs(best[0] - t)) best = p;
+    if (best[1] == null) return;
+    cx.setAttribute("x1", X(best[0])); cx.setAttribute("x2", X(best[0])); cx.setAttribute("opacity", .6);
+    cd.setAttribute("cx", X(best[0])); cd.setAttribute("cy", Y(best[1])); cd.setAttribute("opacity", 1);
+    showTip(f, `${tipX(best[0], best)} · <b>${fmt(best[1])}${unit}</b>`, X(best[0]) * r.width / f.w, ev.clientY - r.top);
+  };
+  f.svg.onmouseleave = () => { hideTip(f); cx.setAttribute("opacity", 0); cd.setAttribute("opacity", 0); };
+}
+
+// calibration: rows [[n, predicted, actual]]
+function calChart(el, rows, { xLab, yLab }) {
+  const f = frame(el, 240, { l: 40, r: 10, t: 10, b: 30 });
+  const X = v => f.pad.l + v * f.iw, Y = v => f.pad.t + f.ih - v * f.ih;
+  let s = yAxis(f, 1, 4, v => pct(v));
+  for (let i = 0; i <= 4; i++) s += `<text x="${X(i / 4)}" y="${f.h - 14}" text-anchor="middle">${pct(i / 4)}</text>`;
+  s += `<text x="${f.pad.l + f.iw / 2}" y="${f.h}" text-anchor="middle">${xLab}</text>`;
+  s += `<line x1="${X(0)}" y1="${Y(0)}" x2="${X(1)}" y2="${Y(1)}" stroke="var(--text-3)" stroke-dasharray="4 4"/>`;
+  const pts = rows.filter(r => r[0] > 0);
+  s += `<path d="${pts.map((r, i) => (i ? "L" : "M") + X(r[1]) + "," + Y(r[2])).join(" ")}" fill="none" stroke="var(--green)" stroke-width="2"/>`;
+  const maxN = Math.max(1, ...pts.map(r => r[0]));
+  pts.forEach((r, i) => s += `<circle data-i="${i}" cx="${X(r[1])}" cy="${Y(r[2])}" r="${4 + 4 * Math.sqrt(r[0] / maxN)}" fill="var(--green)" stroke="var(--panel)" stroke-width="2"/>`);
+  f.svg.innerHTML = s;
+  f.svg.querySelectorAll("circle").forEach(c => {
+    c.onmouseenter = ev => { const r = pts[+c.dataset.i], b = f.svg.getBoundingClientRect();
+      showTip(f, `Predicted <b>${pct(r[1], 1)}</b> → actual <b>${pct(r[2], 1)}</b><br>${fmtInt(r[0])} positions`, +c.getAttribute("cx") * b.width / f.w, +c.getAttribute("cy") * b.height / f.h); };
+    c.onmouseleave = () => hideTip(f);
+  });
+}
+
+function mlChart(el, ml) {
+  const rows = ml.rows, n = rows.length, f = frame(el, 230, { l: 40, r: 10, t: 10, b: 30 });
+  const vals = rows.flatMap(r => r[0] ? [r[1], Math.abs(r[2])] : []);
+  const max = niceMax(Math.max(10, ...vals)), min = -max;
+  const bw = f.iw / n, Y = v => f.pad.t + f.ih - (v - min) / (max - min) * f.ih;
+  let s = yAxis(f, max, 4, v => Math.round(v), min);
+  s += `<line x1="${f.pad.l}" x2="${f.w - f.pad.r}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--axis)"/>`;
+  rows.forEach((r, i) => {
+    const x = f.pad.l + i * bw + 2, w = bw - 4;
+    const lab = i === n - 1 ? `${i * ml.bucket}+` : `${i * ml.bucket}`;
+    if (i % 2 === 0 || n < 8) s += `<text x="${x + w / 2}" y="${f.h - 14}" text-anchor="middle">${lab}</text>`;
+    if (!r[0]) return;
+    const top = Y(r[1]), r0 = Math.min(3, w / 2);
+    s += `<path data-i="${i}" d="M${x},${Y(0)} V${top + r0} Q${x},${top} ${x + r0},${top} H${x + w - r0} Q${x + w},${top} ${x + w},${top + r0} V${Y(0)} Z" fill="var(--green)"/>`;
+    s += `<circle data-i="${i}" cx="${x + w / 2}" cy="${Y(r[2])}" r="4.5" fill="#f7c631" stroke="var(--panel)" stroke-width="2"/>`;
+  });
+  s += `<text x="${f.pad.l + f.iw / 2}" y="${f.h}" text-anchor="middle">plies actually remaining</text>`;
+  f.svg.innerHTML = s;
+  f.svg.querySelectorAll("[data-i]").forEach(e => {
+    e.onmouseenter = ev => { const i = +e.dataset.i, r = rows[i], b = f.svg.getBoundingClientRect();
+      showTip(f, `${i * ml.bucket}${i === n - 1 ? "+" : "–" + ((i + 1) * ml.bucket - 1)} plies left<br>Mean error <b>${fmt1(r[1])}</b> plies<br>Bias <b>${r[2] > 0 ? "+" : ""}${fmt1(r[2])}</b><br>${fmtInt(r[0])} positions`,
+        (f.pad.l + (i + .5) * bw) * b.width / f.w, ev.clientY - b.top); };
+    e.onmouseleave = () => hideTip(f);
+  });
+}
+
+// ---------------------------------------------------------------- sections
+function kpis() {
+  const t = D.totals, r = D.rates || {}, c = D.client || {}, g = D.gpu || {}, gl = g.latest || {}, rk = D.rank || {};
+  const now = D.now;
+  const tiles = [
+    ["Games saved", fmtInt(t.games), `<b>${fmtInt(t.positions)}</b> positions`],
+    ["Games / hour", fmtInt(r.games_per_hour), `<b>${fmtInt(r.positions_per_hour)}</b> positions / hour`],
+    ["Search speed", `${fmtInt(r.visits_per_sec)} <small>visits/s</small>`, `<b>${fmt1(r.positions_per_sec)}</b> moves / s`],
+    ["Active Users rank", rk.rank ? `#${rk.rank} <small>of ${rk.users}</small>` : (rk.error && !rk.t ? "offline" : "not listed"),
+      rk.t ? `<b>${fmtInt(rk.my_games_day)}</b> games/day · ${pct(rk.my_games_day / Math.max(1, rk.games_day), 1)} of all` : "checking training.lczero.org…",
+      "https://training.lczero.org/active_users"],
+    ["Client", c.running ? `<span class="pill ${c.mode}">${c.mode === "match" ? "Match" : "Training"}</span>` : `<span class="pill off">Stopped</span>`,
+      c.running ? `up <b>${dur(now - c.client_start)}</b> · ${c.engine || ""} · client v${c.client_version || "?"}` : "lc0-training-client isn’t running"],
+    ["GPU now", gl.util != null ? `${fmtInt(gl.util)}<small>%</small>` : "–", gl.temp != null ? `<b>${fmtInt(gl.temp)}°C</b> · <b>${fmtInt(gl.power)} W</b> · ${fmtInt(gl.mem_used / 1024 * 10) / 10} GB VRAM` : ""],
+    [g.tracked_since && now - g.tracked_since < 23.5 * 3600 ? "Energy so far" : "Energy, 24 h",
+      `${(g.energy_wh_24h / 1000).toFixed(2)} <small>kWh</small>`,
+      `tracked <b>${dur(now - (g.tracked_since || now))}</b> · avg <b>${fmtInt(g.avg_power_1h)} W</b>`],
+    ["Archive", `${fmt1(D.storage.archive_mb)} <small>MB</small>`, `since ${t.first_time ? new Date(t.first_time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "–"}`],
+  ];
+  // a 4th entry makes the tile a link (opens in the browser, also from the installed app)
+  $("kpis").innerHTML = tiles.map(([k, v, s, href]) => {
+    const inner = `<div class="k">${k}${href ? ' <span class="ext">↗</span>' : ""}</div><div class="v">${v}</div><div class="s">${s}</div>`;
+    return href ? `<a class="kpi link" href="${href}" target="_blank" rel="noopener">${inner}</a>` : `<div class="kpi">${inner}</div>`;
+  }).join("");
+}
+
+function legend(el, items) { el.innerHTML = items.map(([n, c]) => `<span><i style="background:${c}"></i>${n}</span>`).join(""); }
+
+function throughput() {
+  const tp = D.throughput; if (!tp) return;
+  const n = tp.series.training.games.length;
+  const labels = Array.from({ length: n }, (_, i) => tp.start + i * tp.size);
+  const series = MODES.map(m => ({ name: m === "training" ? "Training" : "Match", color: COL[m], values: tp.series[m].games }))
+    .filter(s => s.values.some(v => v));
+  legend($("tpLegend"), series.map(s => [s.name, s.color]));
+  stackedBars($("tpChart"), {
+    labels, series, h: 230,
+    xTick: (t, i) => (new Date(t * 1000).getMinutes() === 0 && (n < 50 || new Date(t * 1000).getHours() % 2 === 0)) ? hhmm(t) : "",
+    tipTitle: t => `${hhmm(t)}–${hhmm(t + tp.size)}`,
+  });
+}
+
+function results() {
+  const rows = [["All", D.modes.all], ["Training", D.modes.training], ["Match", D.modes.match]].filter(r => r[1]);
+  $("results").innerHTML = rows.map(([lab, m]) => {
+    const r = m.results, tot = m.games;
+    const seg = (v, bg, fg, name) => v ? `<span title="${name}: ${v}" style="width:${v / tot * 100}%;background:${bg};color:${fg}">${v / tot >= .12 ? pct(v / tot) : ""}</span>` : "";
+    return `<div class="resrow"><div class="lab">${lab}</div><div class="resbar">${seg(r["1-0"], "var(--res-w)", "#312e2b", "White wins")}${seg(r["1/2-1/2"], "var(--res-d)", "#fff", "Draws")}${seg(r["0-1"], "var(--res-b)", "#fff", "Black wins")}</div><div class="n">${fmtInt(tot)}</div></div>`;
+  }).join("") + `<div class="legend" style="margin-top:4px"><span><i style="background:var(--res-w)"></i>White wins</span><span><i style="background:var(--res-d)"></i>Draws</span><span><i style="background:var(--res-b);border:1px solid #555"></i>Black wins</span></div>`;
+  const dr = D.draw_rate_hourly || [];
+  const games = Object.fromEntries(dr.map(([h, r, g]) => [h + 1800, g]));
+  lineChart($("drawChart"), { pts: dr.map(([h, r]) => [h + 1800, r]), h: 120, min: 0, max: 1, fmt: v => pct(v), gap: 3 * 3600, dots: true,
+    tipX: t => `${hhmm(t - 1800)}–${hhmm(t + 1800)} (${games[t]} games)` });
+}
+
+function gpu() {
+  const g = D.gpu, hst = g.history || [];
+  lineChart($("gUtil"), { pts: hst.map(s => [s.t, s.util]), min: 0, max: 100, fmt: v => Math.round(v), unit: "%" });
+  lineChart($("gTemp"), { pts: hst.map(s => [s.t, s.temp]), min: 30, max: 90, fmt: v => Math.round(v), unit: "°C" });
+  lineChart($("gPower"), { pts: hst.map(s => [s.t, s.power]), fmt: v => Math.round(v), unit: " W" });
+  const l = g.latest || {};
+  $("gpuSub").textContent = `${l.name || "GPU"} · sampled every 10 s, last 6 hours`;
+  $("gpuStats").innerHTML = [
+    ["Avg util, 1 h", g.avg_util_1h != null ? fmtInt(g.avg_util_1h) + "%" : "–"],
+    ["Avg power, 1 h", g.avg_power_1h != null ? fmtInt(g.avg_power_1h) + " W" : "–"],
+    ["Max temp, 24 h", g.max_temp_24h != null ? fmtInt(g.max_temp_24h) + "°C" : "–"],
+    ["VRAM", l.mem_used != null ? `${(l.mem_used / 1024).toFixed(1)} / ${(l.mem_total / 1024).toFixed(1)} GB` : "–"],
+    ["SM clock", l.clock != null ? fmtInt(l.clock) + " MHz" : "–"],
+    ["Fan", l.fan != null ? fmtInt(l.fan) + "%" : "–"],
+    ["Energy tracked", `${(g.energy_wh_tracked / 1000).toFixed(2)} kWh`],
+    ["Wh per game, 1 h", D.rates && D.rates.games_per_hour && g.avg_power_1h ? fmt1(g.avg_power_1h / D.rates.games_per_hour) : "–"],
+  ].map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+}
+
+function lengths() {
+  const lh = D.length_hist; if (!lh) return;
+  const n = lh.series.training.length;
+  const labels = Array.from({ length: n }, (_, i) => i * lh.bin);
+  const series = MODES.map(m => ({ name: m === "training" ? "Training" : "Match", color: COL[m], values: lh.series[m] })).filter(s => s.values.some(v => v));
+  legend($("lenLegend"), series.map(s => [s.name, s.color]));
+  stackedBars($("lenChart"), { labels, series, h: 210, xTick: (b, i) => i % 5 === 0 ? b : "", tipTitle: b => `${b}–${b + lh.bin - 1} plies` });
+  const a = D.modes.all;
+  $("lenStats").innerHTML = [["Average", fmt1(a.plies_avg)], ["Median", a.plies_median], ["Shortest", a.plies_min], ["Longest", a.plies_max],
+    ["Decisive", pct(a.decisive_rate)], ["Captures / game", fmt1(a.captures_per_game)], ["Checks / game", fmt1(a.checks_per_game)]]
+    .map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+}
+
+function searchTable() {
+  const cols = [["all", "All"], ["training", "Training"], ["match", "Match"]].filter(c => D.modes[c[0]]);
+  const rows = [
+    ["Games", m => fmtInt(m.games)], ["Positions", m => fmtInt(m.positions)],
+    ["Visits per move", m => fmtInt(m.visits)], ["Legal moves (avg)", m => fmt1(m.legal)],
+    ["Top-move share", m => pct(m.top_share, 1)], ["Off-best moves", m => pct(m.off_best_rate, 1)],
+    ["Policy KLD", m => m.kld.toFixed(3)], ["Lead changes / game", m => m.lead_changes_per_game.toFixed(2)],
+    ["Avg game length", m => fmt1(m.plies_avg) + " plies"],
+  ];
+  $("searchTable").innerHTML = `<tr><th></th>${cols.map(([k, l]) => `<th class="num">${k !== "all" ? `<span class="mode-dot" style="background:${COL[k]}"></span>` : ""}${l}</th>`).join("")}</tr>`
+    + rows.map(([lab, f]) => `<tr><td>${lab}</td>${cols.map(([k]) => `<td class="num">${f(D.modes[k])}</td>`).join("")}</tr>`).join("");
+}
+
+function heat() {
+  const d = D.dest_heatmap, max = Math.max(1, ...d);
+  // sequential: one hue (green), dark (near the panel) -> light
+  const lo = [43, 58, 36], hi = [194, 230, 150];
+  const col = v => { const t = Math.sqrt(v / max); return `rgb(${lo.map((c, i) => Math.round(c + (hi[i] - c) * t)).join(",")})`; };
+  let h = "";
+  for (let r = 7; r >= 0; r--) {
+    h += `<div class="lab">${r + 1}</div>`;
+    for (let f = 0; f < 8; f++) { const s = r * 8 + f, v = d[s]; h += `<div title="${"abcdefgh"[f]}${r + 1}: ${fmtInt(v)} moves (${pct(v / d.reduce((a, b) => a + b, 0), 1)})" style="background:${col(v)}"></div>`; }
+  }
+  h += `<div class="lab"></div>` + "abcdefgh".split("").map(c => `<div class="lab">${c}</div>`).join("");
+  $("heat").innerHTML = h;
+  $("heatRamp").style.background = `linear-gradient(90deg, ${col(0)}, ${col(max * .25)}, ${col(max)})`;
+}
+
+function hbars(el, items, fmtV) {
+  const max = Math.max(1e-9, ...items.map(i => i[1]));
+  el.innerHTML = items.map(([lab, v, extra]) => `<div class="hbar"><span>${lab}</span><div class="track"><div class="fill" style="width:${v / max * 100}%"></div></div><span class="val">${fmtV(v, extra)}</span></div>`).join("");
+}
+
+function habits() {
+  const pm = D.piece_moves, tot = Object.values(pm).reduce((a, b) => a + b, 0) || 1;
+  const names = { P: "Pawn", N: "Knight", B: "Bishop", R: "Rook", Q: "Queen", K: "King" };
+  hbars($("pieceBars"), Object.entries(pm).map(([k, v]) => [names[k], v / tot]), v => pct(v, 1));
+  const c = D.castling;
+  hbars($("castleBars"), [["W O-O", c.w_short], ["W O-O-O", c.w_long], ["B O-O", c.b_short], ["B O-O-O", c.b_long]], v => pct(v));
+  const p = D.promotions, ptot = Object.values(p).reduce((a, b) => a + b, 0);
+  hbars($("promoBars"), [["Queen", p.Q], ["Knight", p.N], ["Rook", p.R], ["Bishop", p.B]], v => `${fmtInt(v)}${ptot ? ` · ${pct(v / ptot)}` : ""}`);
+  const u = D.underpromotions || [];
+  $("underTable").innerHTML = u.length ? `<tr><th>Game</th><th>Became</th></tr>` + u.map(r => `<tr class="link" data-id="${r.id}"><td>${gameName(r.game)}</td><td>${r.pieces.map(x => ({ N: "Knight", R: "Rook", B: "Bishop" })[x]).join(", ")}</td></tr>`).join("")
+    : `<tr><td style="color:var(--text-3)">None yet</td></tr>`;
+}
+
+function firstMoves() {
+  const fm = D.first_moves || [];
+  const tot = fm.reduce((a, r) => a + r[1], 0);
+  $("firstTable").innerHTML = fm.length ? `<tr><th>Move</th><th class="num">Games</th><th class="num">Share</th><th class="num">White score</th></tr>`
+    + fm.map(([m, n, sc]) => `<tr><td><b>1. ${m}</b></td><td class="num">${n}</td><td class="num">${pct(n / tot)}</td><td class="num">${pct(sc)}</td></tr>`).join("")
+    : `<tr><td style="color:var(--text-3)">No training games from the starting position yet</td></tr>`;
+}
+
+function records() {
+  const f = r => r.fmt === "plies" ? `${r.value} plies` : r.fmt === "q" ? `winner was at ${r.value.toFixed(2)} Q` : r.fmt === "pct" ? pct(r.value) + " off-best" : r.value;
+  $("recordTable").innerHTML = (D.records || []).map(r => `<tr class="link" data-id="${r.id}"><td>${r.label}</td><td>${gameName(r.game)}</td><td class="num">${f(r)}</td></tr>`).join("");
+}
+
+function render() {
+  kpis(); throughput(); results(); gpu(); lengths(); searchTable();
+  calChart($("calChart"), D.calibration, { xLab: "predicted score" });
+  calChart($("drawCalChart"), D.draw_calibration, { xLab: "predicted draw chance" });
+  mlChart($("mlChart"), D.moves_left);
+  heat(); habits(); firstMoves(); records();
+  document.querySelectorAll("tr.link").forEach(tr => tr.onclick = () => window.open(`/?game=${encodeURIComponent(tr.dataset.id)}`, "_blank"));
+}
+
+async function poll() {
+  try {
+    D = await fetch("/api/dashboard").then(r => r.json());
+    if (!D.modes || !D.modes.all) {
+      $("updated").textContent = D.loading ? "building the stats cache…" : "no games yet";
+    } else {
+      render();
+      $("updated").textContent = (D.loading ? "still loading older games · " : "") + "updated " + new Date().toLocaleTimeString();
+    }
+  } catch (e) { $("updated").textContent = "server not reachable"; }
+  setTimeout(poll, 15000);
+}
+let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => D && D.modes && D.modes.all && render(), 150); });
+poll();
+
+// ---------------------------------------------------------------- pause / resume
+const CB = { running: null, busy: false };
+function showClient(text, cls) {
+  const b = $("clientBtn"); b.className = "ctl " + (cls || ""); b.querySelector("span").textContent = text;
+}
+async function clientStatus() {
+  if (CB.busy) return;
+  try {
+    const s = await fetch("/api/client").then(r => r.json());
+    CB.running = s.client;
+    showClient(s.client ? "Training · Pause" : "Paused · Resume", s.client ? "running" : "paused");
+    $("clientBtn").disabled = false;
+  } catch { showClient("offline"); $("clientBtn").disabled = true; }
+}
+$("clientBtn").onclick = async () => {
+  if (CB.busy || CB.running === null) return;
+  const pausing = CB.running;
+  if (pausing && !confirm("Pause training?\n\nThe games in progress (about 32) are dropped. Every finished game is already uploaded. The dashboard keeps running.")) return;
+  CB.busy = true; $("clientBtn").disabled = true;
+  showClient(pausing ? "Pausing…" : "Starting…");
+  try {
+    const r = await fetch(`/api/client/${pausing ? "pause" : "resume"}`, { method: "POST", headers: { "X-Lc0viz": "1" } });
+    const j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || r.status);
+    if (pausing ? j.client : !j.client) throw new Error(j.output || "the client didn't change state");
+  } catch (e) { alert(`Couldn't ${pausing ? "pause" : "resume"} the client: ${e.message}`); }
+  CB.busy = false; await clientStatus(); poll();
+};
+clientStatus(); setInterval(clientStatus, 10000);
+</script>
+</body>
+</html>

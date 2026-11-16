@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#21201d">
+<script src="/pwa.js"></script>
+<title>Lc0 Live Games</title>
+<style>
+:root {
+  --bg: #312e2b;
+  --panel: #262421;
+  --panel-2: #21201d;
+  --panel-hover: #2f2d2a;
+  --line: #3c3a37;
+  --text: #ffffff;
+  --text-2: #bababa;
+  --text-3: #8b8987;
+  --green: #81b64c;
+  --green-dark: #45753c;
+  --sq-light: #ebecd0;
+  --sq-dark: #739552;
+  --hl-light: #f5f682;
+  --hl-dark: #b9ca43;
+  --arrow: #ffaa00;
+  --deviate: #f7c631;
+  --eval-white: #ffffff;
+  --eval-black: #403d39;
+  --draw: #8b8987;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 14px/1.4 "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
+}
+button { font: inherit; color: inherit; }
+
+/* ---------- top bar ---------- */
+.topbar {
+  display: flex; align-items: center; gap: 16px; padding: 10px 16px;
+  background: var(--panel-2); border-bottom: 1px solid #1a1917; flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; letter-spacing: .2px; }
+.brand img { width: 28px; height: 28px; }
+.brand small { font-weight: 600; color: var(--text-3); font-size: 12px; }
+.nav { display: flex; gap: 4px; }
+.nav a { padding: 6px 12px; border-radius: 5px; font-weight: 700; color: var(--text-2); text-decoration: none; }
+.nav a:hover { background: var(--panel-hover); color: #fff; }
+.nav a.on { background: var(--panel); color: #fff; box-shadow: inset 0 -2px 0 var(--green); }
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--text-2);
+  padding: 3px 9px; border-radius: 99px; background: #1b1a18; }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
+.live.on i { background: var(--green); box-shadow: 0 0 0 3px rgba(129,182,76,.25); }
+.tiles { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.tile { background: var(--panel); border-radius: 6px; padding: 6px 12px; min-width: 92px; }
+.tile .k { font-size: 11px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.tile .v { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tile .v small { font-size: 12px; color: var(--text-2); font-weight: 600; }
+.wdl { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; margin-top: 5px; width: 120px; background: var(--panel); }
+.wdl span { display: block; height: 100%; }
+
+/* ---------- layout ---------- */
+.main { display: grid; grid-template-columns: 250px auto minmax(320px, 420px); gap: 16px; padding: 16px; justify-content: center; align-items: start; }
+.panel { background: var(--panel); border-radius: 8px; overflow: hidden; }
+.panel-h { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; font-weight: 700;
+  border-bottom: 1px solid var(--line); color: var(--text); }
+.panel-h .sub { color: var(--text-3); font-weight: 600; font-size: 12px; }
+
+/* ---------- game list ---------- */
+.games { max-height: calc(100vh - 170px); overflow-y: auto; }
+.game { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; padding: 8px 12px;
+  cursor: pointer; border-bottom: 1px solid #2c2a27; }
+.game:hover { background: var(--panel-hover); }
+.game.sel { background: #3a3835; box-shadow: inset 3px 0 0 var(--green); }
+.game .res { width: 18px; height: 18px; border-radius: 3px; display: grid; place-items: center; font-size: 10px; font-weight: 800; }
+.res.w { background: #fff; color: #312e2b; }
+.res.b { background: #151412; color: #fff; border: 1px solid #555; }
+.res.d { background: var(--draw); color: #fff; }
+.game .t { font-weight: 600; font-size: 13px; }
+.game .o { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.game .m { font-size: 12px; color: var(--text-2); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.game.new { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: rgba(129,182,76,.35); } to { background: transparent; } }
+.toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); cursor: pointer; user-select: none; font-weight: 600; }
+.toggle input { accent-color: var(--green); }
+
+/* ---------- board column ---------- */
+.board-col { display: flex; flex-direction: column; gap: 6px; }
+.player { display: flex; align-items: center; gap: 10px; height: 36px; }
+.avatar { width: 32px; height: 32px; border-radius: 3px; display: grid; place-items: center; }
+.avatar.w { background: #fff; }
+.avatar.b { background: #1f1e1c; }
+.avatar img { width: 26px; height: 26px; }
+.player .name { font-weight: 700; }
+.player .mat { color: var(--text-2); font-size: 12px; font-weight: 600; }
+.player .tomove { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--text-2); background: var(--panel); padding: 3px 8px; border-radius: 4px; visibility: hidden; }
+.player .tomove.on { visibility: visible; }
+.board-wrap { display: flex; gap: 8px; --size: min(calc(100vh - 230px), calc(100vw - 760px), 680px); }
+.evalbar { width: 22px; height: var(--size); border-radius: 3px; overflow: hidden; position: relative; background: var(--eval-black); flex: none; }
+.evalbar .fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--eval-white); transition: height .25s ease; }
+.evalbar .lbl { position: absolute; left: 0; right: 0; text-align: center; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.evalbar .lbl.top { top: 4px; color: #fff; }
+.evalbar .lbl.bot { bottom: 4px; color: #312e2b; }
+.board { position: relative; width: var(--size); height: var(--size); border-radius: 3px; overflow: hidden; flex: none;
+  display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); user-select: none; }
+.sq { position: relative; }
+.sq.l { background: var(--sq-light); }
+.sq.d { background: var(--sq-dark); }
+.sq.l.hl { background: var(--hl-light); }
+.sq.d.hl { background: var(--hl-dark); }
+.sq img { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.sq .cr, .sq .cf { position: absolute; font-size: calc(var(--size) * .022); font-weight: 700; line-height: 1; }
+.sq .cr { top: 3px; left: 3px; }
+.sq .cf { bottom: 3px; right: 4px; }
+.sq.l .cr, .sq.l .cf { color: var(--sq-dark); }
+.sq.d .cr, .sq.d .cf { color: var(--sq-light); }
+.arrows { position: absolute; inset: 0; pointer-events: none; }
+.controls { display: flex; gap: 6px; margin-top: 4px; }
+.controls button { flex: 1; background: var(--panel); border: 0; border-radius: 5px; height: 40px; cursor: pointer;
+  font-size: 18px; font-weight: 700; color: var(--text-2); box-shadow: 0 2px 0 #1a1917; }
+.controls button:hover { background: var(--panel-hover); color: #fff; }
+.controls button:active { transform: translateY(1px); box-shadow: none; }
+.controls button:focus:not(:focus-visible) { outline: none; }
+
+/* ---------- right panel ---------- */
+.right { display: flex; flex-direction: column; gap: 12px; }
+.evalhead { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.evalchip { min-width: 58px; text-align: center; font-weight: 800; font-size: 16px; padding: 4px 8px; border-radius: 4px; font-variant-numeric: tabular-nums; }
+.evalchip.w { background: #fff; color: #312e2b; }
+.evalchip.b { background: #1b1a18; color: #fff; }
+.evalhead .meta { font-size: 12px; color: var(--text-2); line-height: 1.5; }
+.evalhead .meta b { color: #fff; }
+.cands { padding: 4px 0; }
+.cand { display: grid; grid-template-columns: 54px 1fr auto; align-items: center; gap: 10px; padding: 5px 14px; cursor: default; }
+.cand:hover { background: var(--panel-hover); }
+.cand .pct { font-weight: 800; font-size: 13px; text-align: center; padding: 2px 0; border-radius: 3px; background: #3a3835; font-variant-numeric: tabular-nums; }
+.cand .bar { height: 6px; border-radius: 3px; background: #3a3835; overflow: hidden; }
+.cand .bar span { display: block; height: 100%; background: var(--arrow); border-radius: 3px; }
+.cand .mv { font-weight: 700; display: flex; gap: 8px; align-items: center; }
+.tag { font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: .3px; }
+.tag.played { background: var(--green-dark); color: #fff; }
+.tag.best { background: #3a3835; color: var(--text-2); }
+.moves { max-height: 260px; overflow-y: auto; font-variant-numeric: tabular-nums; }
+.mrow { display: grid; grid-template-columns: 44px 1fr 1fr; padding: 1px 8px; }
+.mrow:nth-child(odd) { background: #2a2825; }
+.mrow .n { color: var(--text-3); padding: 4px 6px; font-weight: 600; }
+.mv-cell { padding: 4px 8px; border-radius: 3px; cursor: pointer; font-weight: 700; color: var(--text-2); display: flex; align-items: center; gap: 4px; }
+.mv-cell:hover { background: #45423e; color: #fff; }
+.mv-cell.cur { background: #4b4847; color: #fff; box-shadow: inset 0 -2px 0 #6e6b69; }
+.mv-cell .dv { color: var(--deviate); font-size: 12px; font-weight: 800; }
+.chart { padding: 10px 12px 12px; position: relative; }
+.chart svg { display: block; width: 100%; height: 130px; cursor: crosshair; }
+.tip { position: absolute; pointer-events: none; background: #1b1a18; color: #fff; border-radius: 5px; padding: 6px 9px;
+  font-size: 12px; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,.4); display: none; z-index: 5; }
+.tip b { font-variant-numeric: tabular-nums; }
+.details { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-top: 1px solid var(--line); }
+.details div { background: var(--panel); padding: 8px 10px; }
+.details .k { font-size: 10px; color: var(--text-3); text-transform: uppercase; font-weight: 700; letter-spacing: .4px; }
+.details .v { font-weight: 800; font-variant-numeric: tabular-nums; }
+.empty { padding: 30px 16px; color: var(--text-3); text-align: center; }
+
+@media (max-width: 1180px) {
+  .main { grid-template-columns: 1fr; padding: 16px; }
+  .board-wrap { --size: min(calc(100vw - 62px), 640px); }
+  .games { max-height: 240px; }
+  .tiles { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="/pieces/cburnett/wN.svg" alt=""> Lc0 Live</div>
+  <nav class="nav"><a href="/live">Live boards</a><a href="/" class="on">Analysis</a><a href="/net">Net</a><a href="/stats">Dashboard</a><a href="/pieces">Pieces</a></nav>
+  <span class="live" id="live"><i></i><span id="liveText">connecting…</span></span>
+  <div class="tiles">
+    <div class="tile"><div class="k">Games saved</div><div class="v" id="tGames">–</div></div>
+    <div class="tile"><div class="k">Last hour</div><div class="v" id="tHour">–</div></div>
+    <div class="tile"><div class="k">Positions / hr</div><div class="v" id="tPos">–</div></div>
+    <div class="tile"><div class="k">Avg length</div><div class="v" id="tLen">–</div></div>
+    <div class="tile"><div class="k">Results <small id="tResTxt"></small></div><div class="wdl" id="tRes" title=""></div></div>
+    <div class="tile"><div class="k">GPU</div><div class="v" id="tGpu">–</div></div>
+  </div>
+</header>
+
+<main class="main">
+  <section class="panel">
+    <div class="panel-h">Games <label class="toggle"><input type="checkbox" id="follow" checked> Follow newest</label></div>
+    <div class="games" id="games"><div class="empty">Waiting for the first finished game…</div></div>
+  </section>
+
+  <section class="board-col">
+    <div class="player" id="pTop"></div>
+    <div class="board-wrap">
+      <div class="evalbar" id="evalbar"><div class="fill" id="evalfill"></div><div class="lbl top" id="evalTop"></div><div class="lbl bot" id="evalBot"></div></div>
+      <div class="board" id="board"><svg class="arrows" id="arrows" viewBox="0 0 8 8"></svg></div>
+    </div>
+    <div class="player" id="pBot"></div>
+    <div class="controls">
+      <button id="bFirst" title="First (Home)">⏮</button>
+      <button id="bPrev" title="Back (←)">◀</button>
+      <button id="bNext" title="Forward (→)">▶</button>
+      <button id="bLast" title="Last (End)">⏭</button>
+      <button id="bFlip" title="Flip board (F)">⇅</button>
+      <button id="bNet" title="Open this position in the Net explorer" style="font-size:14px">Net ↗</button>
+    </div>
+  </section>
+
+  <section class="right">
+    <div class="panel">
+      <div class="evalhead">
+        <div class="evalchip w" id="evalChip">–</div>
+        <div class="meta" id="evalMeta">Select a game</div>
+      </div>
+      <div class="cands" id="cands"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-h">Moves <span class="sub" id="movesSub"></span></div>
+      <div class="moves" id="moves"></div>
+      <div class="chart" id="chart">
+        <svg id="evalChart" preserveAspectRatio="none" role="img" aria-label="Evaluation over the game"></svg>
+        <div class="tip" id="tip"></div>
+      </div>
+      <div class="details" id="details"></div>
+    </div>
+  </section>
+</main>
+
+<script src="/pieceset.js"></script>
+<script>
+const S = { games: [], stats: null, cur: null, idx: 0, flipped: false, seen: new Set(), first: true };
+const $ = id => document.getElementById(id);
+const FILES = "abcdefgh";
+const PIECE = c => PieceSet.url(c);
+const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+
+// Lc0's classic Q -> centipawn mapping (display only)
+const qToPawns = q => { const c = Math.max(-0.999, Math.min(0.999, q)); return 1.11714640912 * Math.tan(1.5620688421 * c); };
+const fmtEval = q => { const p = qToPawns(q); const a = Math.abs(p); const s = a >= 99 ? "99" : a.toFixed(a >= 10 ? 0 : 1); return (p >= 0 ? "+" : "−") + s; };
+const fmtTime = t => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const ago = t => { if (!t) return "never"; const s = Date.now() / 1000 - t; return s < 60 ? `${Math.round(s)}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : `${(s / 3600).toFixed(1)}h ago`; };
+
+function parseFen(fen) {
+  const b = Array(64).fill(".");
+  fen.split("/").forEach((row, i) => {
+    let f = 0; const r = 7 - i;
+    for (const ch of row) { if (/\d/.test(ch)) f += +ch; else { b[r * 8 + f] = ch; f++; } }
+  });
+  return b;
+}
+const sqIdx = s => FILES.indexOf(s[0]) + 8 * (+s[1] - 1);
+
+// ---------------- board ----------------
+function buildBoard() {
+  const el = $("board");
+  [...el.querySelectorAll(".sq")].forEach(n => n.remove());
+  for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+    const file = S.flipped ? 7 - col : col, rank = S.flipped ? row : 7 - row;
+    const d = document.createElement("div");
+    d.className = "sq " + ((file + rank) % 2 ? "l" : "d");
+    d.dataset.sq = rank * 8 + file;
+    if (col === 0) d.insertAdjacentHTML("beforeend", `<span class="cr">${rank + 1}</span>`);
+    if (row === 7) d.insertAdjacentHTML("beforeend", `<span class="cf">${FILES[file]}</span>`);
+    el.insertBefore(d, $("arrows"));
+  }
+}
+
+function sqXY(s) { // centre of square in 0..8 board coordinates
+  const f = s % 8, r = Math.floor(s / 8);
+  return S.flipped ? [7 - f + .5, r + .5] : [f + .5, 7 - r + .5];
+}
+
+function arrowSVG(from, to, width, opacity, color) {
+  const [x1, y1] = sqXY(from), [x2, y2] = sqXY(to);
+  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
+  const head = Math.max(.32, width * 2.2), hw = Math.max(.26, width * 1.8);
+  const sx = x1 + ux * .28, sy = y1 + uy * .28, ex = x2 - ux * head, ey = y2 - uy * head;
+  const px = -uy, py = ux;
+  const knight = Math.abs(dx) * Math.abs(dy) === 2;
+  let shaft;
+  if (knight) { // L-shaped like chess.com
+    const cx = Math.abs(dx) > Math.abs(dy) ? x2 : x1, cy = Math.abs(dx) > Math.abs(dy) ? y1 : y2;
+    const l2 = Math.hypot(x2 - cx, y2 - cy), vx = (x2 - cx) / l2, vy = (y2 - cy) / l2;
+    const l1 = Math.hypot(cx - x1, cy - y1), wx = (cx - x1) / l1, wy = (cy - y1) / l1;
+    const hx = x2 - vx * head, hy = y2 - vy * head;
+    shaft = `<polyline points="${x1 + wx * .28},${y1 + wy * .28} ${cx},${cy} ${hx},${hy}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linejoin="miter" stroke-linecap="butt"/>`;
+    const qx = -vy, qy = vx;
+    return `<g opacity="${opacity}">${shaft}<polygon points="${x2},${y2} ${hx + qx * hw / 2},${hy + qy * hw / 2} ${hx - qx * hw / 2},${hy - qy * hw / 2}" fill="${color}"/></g>`;
+  }
+  shaft = `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${color}" stroke-width="${width}"/>`;
+  return `<g opacity="${opacity}">${shaft}<polygon points="${x2 - ux * .04},${y2 - uy * .04} ${ex + px * hw / 2},${ey + py * hw / 2} ${ex - px * hw / 2},${ey - py * hw / 2}" fill="${color}"/></g>`;
+}
+
+function render() {
+  const g = S.cur; if (!g) return;
+  const n = g.plies.length, i = S.idx;
+  const fen = i < n ? g.plies[i].fen : g.final_fen;
+  const board = parseFen(fen);
+  const last = i > 0 ? g.plies[i - 1].move : null;
+  const hl = last ? [sqIdx(last.slice(0, 2)), sqIdx(last.slice(2, 4))] : [];
+  document.querySelectorAll("#board .sq").forEach(d => {
+    const s = +d.dataset.sq;
+    d.classList.toggle("hl", hl.includes(s));
+    const img = d.querySelector("img"), pc = board[s];
+    if (pc === ".") { img && img.remove(); }
+    else if (!img) d.insertAdjacentHTML("afterbegin", `<img src="${PIECE(pc)}" alt="${pc}">`);
+    else if (img.alt !== pc) { img.src = PIECE(pc); img.alt = pc; }
+  });
+  // arrows: Leela's search distribution at this position
+  let arrows = "";
+  if (i < n) {
+    const cands = g.plies[i].cands;
+    cands.slice().reverse().forEach((c, k) => {
+      const rank = cands.length - 1 - k; if (c.p < 0.03 && rank > 0) return;
+      const w = rank === 0 ? .2 : .1 + .1 * Math.min(1, c.p * 2);
+      const op = rank === 0 ? .85 : .35 + .45 * Math.min(1, c.p * 2);
+      arrows += arrowSVG(sqIdx(c.uci.slice(0, 2)), sqIdx(c.uci.slice(2, 4)), w, op, "var(--arrow)");
+    });
+  }
+  $("arrows").innerHTML = arrows;
+
+  // eval: value at this position (after the final move, use the game result)
+  const p = i < n ? g.plies[i] : null;
+  const q = p ? p.q : (g.result === "1-0" ? 1 : g.result === "0-1" ? -1 : 0);
+  const whiteShare = 50 + 50 * Math.max(-1, Math.min(1, q));
+  $("evalfill").style.height = whiteShare + "%";
+  $("evalbar").style.transform = S.flipped ? "rotate(180deg)" : "";
+  const label = p ? fmtEval(q).replace("+", "").replace("−", "") : (g.result === "1/2-1/2" ? "½" : g.result);
+  $("evalTop").textContent = q < 0 ? label : ""; $("evalBot").textContent = q >= 0 ? label : "";
+  $("evalTop").style.transform = $("evalBot").style.transform = S.flipped ? "rotate(180deg)" : "";
+  const chip = $("evalChip");
+  chip.textContent = p ? fmtEval(q) : g.result.replace("1/2-1/2", "½–½");
+  chip.className = "evalchip " + (q >= 0 ? "w" : "b");
+  if (p) {
+    const W = Math.max(0, (1 + q - p.d) / 2), L = Math.max(0, (1 - q - p.d) / 2);
+    $("evalMeta").innerHTML = `<b>${p.white_to_move ? "White" : "Black"} to move</b> · ${p.visits.toLocaleString()} visits<br>
+      W ${Math.round(W * 100)}% · D ${Math.round(p.d * 100)}% · L ${Math.round(L * 100)}% <span style="color:var(--text-3)">(white’s view)</span>`;
+  } else {
+    $("evalMeta").innerHTML = `<b>Game over</b> · ${g.result === "1/2-1/2" ? "Draw" : g.result === "1-0" ? "White won" : "Black won"}`;
+  }
+  // candidate list
+  $("cands").innerHTML = p ? p.cands.map((c, k) => `
+    <div class="cand" data-k="${k}"><div class="pct">${(c.p * 100).toFixed(c.p >= .1 ? 0 : 1)}%</div>
+      <div><div class="mv">${c.san}${c.uci === p.move ? '<span class="tag played">played</span>' : ""}${c.uci === p.best && c.uci !== p.move ? '<span class="tag best">best</span>' : ""}</div>
+      <div class="bar"><span style="width:${(c.p / p.cands[0].p * 100).toFixed(1)}%"></span></div></div>
+      <div style="color:var(--text-3);font-size:12px">${c.uci}</div></div>`).join("")
+    + `<div style="padding:4px 14px 8px;color:var(--text-3);font-size:12px">Share of Leela’s search at this position · arrows on the board</div>`
+    : "";
+
+  // players + material
+  const mat = { w: 0, b: 0 };
+  board.forEach(c => { if (c !== ".") mat[c === c.toUpperCase() ? "w" : "b"] += VAL[c.toLowerCase()]; });
+  const wtm = p ? p.white_to_move : null;
+  const pl = (side) => {
+    const w = side === "w", diff = w ? mat.w - mat.b : mat.b - mat.w;
+    return `<div class="avatar ${side}"><img src="${PIECE(side === "w" ? "K" : "k")}" alt=""></div>
+      <div><div class="name">${w ? "White" : "Black"}</div><div class="mat">${diff > 0 ? "+" + diff : "&nbsp;"}</div></div>
+      <div class="tomove ${wtm === w ? "on" : ""}">to move</div>`;
+  };
+  $("pTop").innerHTML = pl(S.flipped ? "w" : "b");
+  $("pBot").innerHTML = pl(S.flipped ? "b" : "w");
+
+  // move list highlight + details
+  document.querySelectorAll(".mv-cell").forEach(c => c.classList.toggle("cur", +c.dataset.i === i - 1));
+  const cur = document.querySelector(".mv-cell.cur");
+  if (cur) { const box = $("moves"), r = cur.offsetTop - box.offsetTop; if (r < box.scrollTop || r > box.scrollTop + box.clientHeight - 30) box.scrollTop = r - box.clientHeight / 2; }
+  else if (i === 0) $("moves").scrollTop = 0;
+  $("details").innerHTML = p ? [
+    ["Ply", `${i + 1}/${n}`], ["Legal", p.legal], ["Moves left", p.m.toFixed(0)], ["Policy KLD", p.kld.toFixed(3)]
+  ].map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("") : "";
+  drawChart();
+}
+
+function renderMoves() {
+  const g = S.cur, plies = g.plies;
+  let html = "", row = null, num = 1;
+  const startBlack = !plies[0].white_to_move;
+  plies.forEach((p, i) => {
+    const dv = p.move !== p.best ? `<span class="dv" title="Best by search was ${p.best_san}">?!</span>` : "";
+    const cell = `<div class="mv-cell" data-i="${i}">${p.san}${dv}</div>`;
+    if (p.white_to_move) { if (row) html += row + "</div>"; row = `<div class="mrow"><div class="n">${num}.</div>${cell}`; }
+    else { if (!row) row = `<div class="mrow"><div class="n">${num}.</div><div class="mv-cell" style="cursor:default">…</div>`; row += cell; html += row + "</div>"; row = null; num++; }
+  });
+  if (row) html += row + "<div></div></div>";
+  $("moves").innerHTML = html;
+  const dev = plies.filter(p => p.move !== p.best).length;
+  $("movesSub").textContent = `from book position · ${g.result.replace("1/2-1/2", "½–½")} · ${dev} off-best`;
+  $("moves").querySelectorAll(".mv-cell[data-i]").forEach(c => c.onclick = () => go(+c.dataset.i + 1));
+}
+
+// ---------------- eval chart (game review style) ----------------
+function drawChart() {
+  const g = S.cur, svg = $("evalChart"); if (!g) return;
+  const W = svg.clientWidth || 380, H = 130, n = g.plies.length;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const final = g.result === "1-0" ? 1 : g.result === "0-1" ? -1 : 0;
+  const qs = g.plies.map(p => p.q).concat([final]);
+  const x = i => (i / (qs.length - 1)) * W;
+  const y = q => H / 2 - (Math.max(-1, Math.min(1, q)) * (H / 2 - 4));
+  let area = `M0,${H} `; qs.forEach((q, i) => area += `L${x(i).toFixed(1)},${y(q).toFixed(1)} `); area += `L${W},${H} Z`;
+  let line = ""; qs.forEach((q, i) => line += (i ? "L" : "M") + `${x(i).toFixed(1)},${y(q).toFixed(1)} `);
+  const cx = x(S.idx);
+  const marks = g.plies.map((p, i) => p.move !== p.best ? `<circle cx="${x(i + 1)}" cy="${y(qs[i + 1])}" r="4" fill="var(--deviate)" stroke="var(--panel)" stroke-width="2"/>` : "").join("");
+  svg.innerHTML = `
+    <rect width="${W}" height="${H}" fill="#403d39" rx="3"/>
+    <path d="${area}" fill="#ffffff"/>
+    <line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" stroke="#8b8987" stroke-width="1" stroke-dasharray="3 3"/>
+    <path d="${line}" fill="none" stroke="#c9c7c4" stroke-width="2" stroke-linejoin="round"/>
+    ${marks}
+    <line x1="${cx}" x2="${cx}" y1="0" y2="${H}" stroke="var(--green)" stroke-width="2"/>
+    <circle cx="${cx}" cy="${y(qs[S.idx])}" r="5" fill="var(--green)" stroke="var(--panel)" stroke-width="2"/>
+    <line id="hoverLine" x1="0" x2="0" y1="0" y2="${H}" stroke="#bababa" stroke-width="1" opacity="0"/>`;
+  svg._qs = qs; svg._x = x;
+}
+function chartIndex(ev) {
+  const svg = $("evalChart"), r = svg.getBoundingClientRect(), qs = svg._qs;
+  return Math.max(0, Math.min(qs.length - 1, Math.round((ev.clientX - r.left) / r.width * (qs.length - 1))));
+}
+$("evalChart").addEventListener("mousemove", ev => {
+  const g = S.cur; if (!g) return;
+  const i = chartIndex(ev), svg = $("evalChart"), tip = $("tip"), hl = $("hoverLine");
+  hl.setAttribute("x1", svg._x(i)); hl.setAttribute("x2", svg._x(i)); hl.setAttribute("opacity", 1);
+  const p = g.plies[i - 1];
+  const q = svg._qs[i];
+  tip.innerHTML = i === 0 ? `Book position · <b>${fmtEval(q)}</b>` : `${p.white_to_move ? "" : "… "}<b>${p.san}</b> → <b>${i < g.plies.length ? fmtEval(q) : g.result}</b>${p.move !== p.best ? ` · best ${p.best_san}` : ""}`;
+  tip.style.display = "block";
+  const r = $("chart").getBoundingClientRect();
+  let left = ev.clientX - r.left + 12; if (left + tip.offsetWidth > r.width) left = ev.clientX - r.left - tip.offsetWidth - 12;
+  tip.style.left = left + "px"; tip.style.top = "4px";
+});
+$("evalChart").addEventListener("mouseleave", () => { $("tip").style.display = "none"; const h = $("hoverLine"); h && h.setAttribute("opacity", 0); });
+$("evalChart").addEventListener("click", ev => go(chartIndex(ev)));
+
+// ---------------- data ----------------
+function go(i) { if (!S.cur) return; S.idx = Math.max(0, Math.min(S.cur.plies.length, i)); render(); }
+
+async function openGame(id, atEnd = false) {
+  const g = await fetch(`/api/game/${encodeURIComponent(id)}`).then(r => r.json());
+  S.cur = g; S.idx = atEnd ? g.plies.length : 0;
+  document.querySelectorAll(".game").forEach(e => e.classList.toggle("sel", e.dataset.id === id));
+  renderMoves(); render();
+}
+
+function renderStats(st) {
+  $("tGames").innerHTML = st.games.toLocaleString();
+  $("tHour").innerHTML = `${st.games_last_hour} <small>games</small>`;
+  $("tPos").textContent = st.positions_last_hour.toLocaleString();
+  $("tLen").innerHTML = `${st.avg_plies} <small>plies</small>`;
+  const r = st.results, tot = r["1-0"] + r["0-1"] + r["1/2-1/2"] || 1;
+  $("tRes").innerHTML = [["1-0", "#ffffff"], ["1/2-1/2", "#8b8987"], ["0-1", "#151412"]]
+    .map(([k, c]) => r[k] ? `<span style="width:${r[k] / tot * 100}%;background:${c}"></span>` : "").join("");
+  $("tResTxt").textContent = `${r["1-0"]}·${r["1/2-1/2"]}·${r["0-1"]}`;
+  $("tRes").title = `White wins ${r["1-0"]} · Draws ${r["1/2-1/2"]} · Black wins ${r["0-1"]}`;
+  $("tGpu").innerHTML = st.gpu ? `${st.gpu.util.toFixed(0)}% <small>${st.gpu.temp.toFixed(0)}°C · ${st.gpu.power.toFixed(0)} W</small>` : "–";
+  if (st.gpu) $("tGpu").parentElement.title = st.gpu.name;
+  const active = st.last_client_write && Date.now() / 1000 - st.last_client_write < 600;
+  $("live").classList.toggle("on", !!active);
+  $("liveText").textContent = active ? `client active · last game ${ago(st.last_game_time)}` : `client idle · last write ${ago(st.last_client_write)}`;
+}
+
+function renderList() {
+  const el = $("games");
+  if (!S.games.length) { el.innerHTML = `<div class="empty">Waiting for the first finished game…</div>`; return; }
+  el.innerHTML = S.games.map(g => {
+    const cls = g.result === "1-0" ? "w" : g.result === "0-1" ? "b" : "d";
+    const txt = g.result === "1-0" ? "1" : g.result === "0-1" ? "0" : "½";
+    const isNew = !S.first && !S.seen.has(g.id);
+    return `<div class="game ${isNew ? "new" : ""} ${S.cur && S.cur.id === g.id ? "sel" : ""}" data-id="${g.id}">
+      <div class="res ${cls}">${txt}</div>
+      <div><div class="t">${g.game.replace("game_", "Game #").replace(/#0+(\d)/, "#$1")}</div><div class="o">${g.opening}</div></div>
+      <div class="m">${fmtTime(g.time)}<br>${g.positions} plies</div></div>`;
+  }).join("");
+  S.games.forEach(g => S.seen.add(g.id));
+  el.querySelectorAll(".game").forEach(e => e.onclick = () => { $("follow").checked = false; openGame(e.dataset.id); });
+}
+
+async function poll() {
+  try {
+    const { games, stats } = await fetch("/api/games").then(r => r.json());
+    const newest = games[0] && games[0].id, changed = games.length !== S.games.length || newest !== (S.games[0] && S.games[0].id);
+    S.games = games; renderStats(stats);
+    if (changed || S.first) renderList();
+    const want = S.first && new URLSearchParams(location.search).get("game");
+    if (want && games.some(g => g.id === want)) {  // deep link from the Live boards page
+      $("follow").checked = false;
+      await openGame(want);
+      go(+new URLSearchParams(location.search).get("ply") || 0);
+    } else if (newest && (!S.cur || (changed && $("follow").checked))) await openGame(newest, !S.first);
+    S.first = false;
+  } catch (e) {
+    $("live").classList.remove("on"); $("liveText").textContent = "server not reachable";
+  }
+  setTimeout(poll, 5000);
+}
+
+$("bFirst").onclick = () => go(0);
+$("bPrev").onclick = () => go(S.idx - 1);
+$("bNext").onclick = () => go(S.idx + 1);
+$("bLast").onclick = () => go(1e9);
+$("bFlip").onclick = () => { S.flipped = !S.flipped; buildBoard(); render(); };
+$("bNet").onclick = () => S.cur && window.open(`/net?game=${encodeURIComponent(S.cur.id)}&ply=${Math.min(S.idx, S.cur.plies.length - 1)}`, "_blank");
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.key === "ArrowLeft") { go(S.idx - 1); e.preventDefault(); }
+  else if (e.key === "ArrowRight") { go(S.idx + 1); e.preventDefault(); }
+  else if (e.key === "Home") go(0);
+  else if (e.key === "End") go(1e9);
+  else if (e.key === "f" || e.key === "F") $("bFlip").click();
+});
+window.addEventListener("resize", drawChart);
+PieceSet.onChange(() => { document.querySelectorAll("#board img").forEach(i => i.remove()); render(); });
+buildBoard();
+poll();
+</script>
+</body>
+</html>

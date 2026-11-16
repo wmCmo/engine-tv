@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#21201d">
+<script src="/pwa.js"></script>
+<title>Lc0 Net Explorer</title>
+<style>
+:root {
+  --bg: #312e2b; --panel: #262421; --panel-2: #21201d; --panel-hover: #2f2d2a; --line: #3c3a37;
+  --text: #fff; --text-2: #bababa; --text-3: #8b8987;
+  --green: #81b64c; --green-dark: #45753c;
+  --sq-light: #ebecd0; --sq-dark: #739552; --hl-light: #f5f682; --hl-dark: #b9ca43; --arrow: #ffaa00;
+  --canvas: #1e1e1e; --dot: #383838; --select: #0d99ff;
+  --heat: 255, 170, 0;      /* sequential: one hue, strength = opacity */
+  --heat-board: 255, 96, 0; /* deeper orange on the big board, so it reads on the cream squares */
+  --neg: 57, 135, 229;      /* diverging pair for signed values: blue (-) / orange (+), transparent at 0 */
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 13px/1.4 "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  display: flex; flex-direction: column; overflow: hidden; }
+button, input, select { font: inherit; color: inherit; }
+.topbar { display: flex; align-items: center; gap: 16px; padding: 8px 16px; background: var(--panel-2); border-bottom: 1px solid #1a1917; flex-wrap: wrap; flex: none; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; }
+.brand img { width: 28px; height: 28px; }
+.nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.nav a { padding: 6px 12px; border-radius: 5px; font-weight: 700; color: var(--text-2); text-decoration: none; }
+.nav a:hover { background: var(--panel-hover); color: #fff; }
+.nav a.on { background: var(--panel); color: #fff; box-shadow: inset 0 -2px 0 var(--green); }
+.helper { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
+.helper i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); display: inline-block; }
+.helper.on i { background: var(--green); }
+.helper button { background: var(--panel); border: 0; border-radius: 4px; padding: 3px 8px; cursor: pointer; color: var(--text-2); font-weight: 700; }
+.helper button:hover { color: #fff; }
+
+.app { flex: 1; display: grid; grid-template-columns: 240px 1fr 380px; min-height: 0; }
+.side { background: var(--panel); overflow-y: auto; min-height: 0; }
+.side h3 { margin: 0; padding: 12px 14px 6px; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .5px; }
+.pos { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); }
+.pos select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 6px; width: 100%; }
+.plyrow { display: flex; gap: 6px; align-items: center; }
+.plyrow input[type=range] { flex: 1; accent-color: var(--green); }
+.plyrow button, .btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 4px 9px; cursor: pointer; font-weight: 700; }
+.plyrow button:hover, .btn:hover { border-color: #5d5a57; }
+.btn.on { background: var(--green-dark); border-color: var(--green); }
+.posinfo { color: var(--text-3); font-size: 12px; }
+.layers { padding: 4px 0 12px; }
+.layer { display: flex; align-items: center; gap: 8px; padding: 5px 14px; cursor: pointer; color: var(--text-2); }
+.layer:hover { background: var(--panel-hover); color: #fff; }
+.layer.sel { background: rgba(13,153,255,.18); color: #fff; box-shadow: inset 2px 0 0 var(--select); }
+.layer .ic { width: 16px; text-align: center; color: var(--text-3); font-size: 11px; }
+.layer canvas { margin-left: auto; width: 24px; height: 24px; border-radius: 2px; image-rendering: pixelated; }
+
+/* ---------- canvas (Figma-style) ---------- */
+.stage { position: relative; overflow: hidden; background-color: var(--canvas); cursor: default; min-height: 0;
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+  touch-action: none;          /* the canvas handles drags and pinches itself; the browser must not scroll/zoom the page */
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.stage.panning { cursor: grabbing; }
+.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.edges path { fill: none; stroke: #4a4744; stroke-width: 2; }
+.edges path.flow { stroke: var(--green); stroke-dasharray: 6 8; animation: flow .6s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -14; } }
+.node { position: absolute; width: 168px; background: var(--panel); border: 1px solid #3a3835; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.35); user-select: none; }
+.node:hover { border-color: #5d5a57; }
+.node.sel { border-color: var(--select); box-shadow: 0 0 0 1px var(--select), 0 6px 18px rgba(0,0,0,.45); }
+.node.pulse { border-color: var(--green); box-shadow: 0 0 0 2px var(--green), 0 0 24px rgba(129,182,76,.45); }
+.node .hd { padding: 7px 10px; font-weight: 800; font-size: 12px; display: flex; justify-content: space-between; cursor: grab; border-bottom: 1px solid #33312e; }
+.node .hd span { color: var(--text-3); font-weight: 600; }
+.node .bd { padding: 8px 10px 10px; }
+.node canvas.heat { width: 148px; height: 148px; border-radius: 3px; display: block; image-rendering: pixelated; background: #2b2a27; }
+.node .foc { display: flex; gap: 1px; height: 18px; align-items: flex-end; margin-top: 6px; }
+.node .foc span { flex: 1; background: #6d8bbf; border-radius: 1px 1px 0 0; min-height: 1px; }
+.node .meta { color: var(--text-3); font-size: 11px; margin-top: 4px; }
+.node .wdl { display: flex; height: 16px; border-radius: 3px; overflow: hidden; gap: 2px; margin: 4px 0; }
+.node .wdl span { display: block; }
+.node .big { font-size: 22px; font-weight: 800; }
+.frame-label { position: absolute; color: var(--text-3); font-size: 12px; font-weight: 700; }
+.tools { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 4px; background: var(--panel); border-radius: 8px; padding: 4px; box-shadow: 0 6px 18px rgba(0,0,0,.4); align-items: center; }
+.tools button { background: transparent; border: 0; border-radius: 5px; padding: 6px 10px; cursor: pointer; color: var(--text-2); font-weight: 700; }
+.tools button:hover { background: var(--panel-hover); color: #fff; }
+.tools button.on { background: var(--select); color: #fff; }
+.tools .z { min-width: 52px; text-align: center; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.tools .sep { width: 1px; height: 20px; background: var(--line); margin: 0 2px; }
+.overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(30,30,30,.7); z-index: 5; }
+.overlay div { background: var(--panel); padding: 18px 24px; border-radius: 10px; text-align: center; max-width: 380px; }
+.overlay b { display: block; font-size: 16px; margin-bottom: 4px; }
+
+/* ---------- inspector ---------- */
+.insp { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.insp h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.insp .sub { color: var(--text-3); font-size: 12px; margin-top: -8px; }
+.tabs { display: flex; gap: 2px; background: var(--panel-2); border-radius: 6px; padding: 3px; }
+.tabs button { flex: 1; border: 0; background: transparent; padding: 5px; border-radius: 4px; cursor: pointer; color: var(--text-2); font-weight: 700; }
+.tabs button.on { background: #45423e; color: #fff; }
+.bigboard { width: 100%; position: relative; }
+.bigboard .cb-heat { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: pixelated; }
+.bigboard .hit { position: absolute; inset: 0; z-index: 4; cursor: crosshair; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row label { color: var(--text-3); font-size: 12px; }
+.row input[type=number] { width: 80px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; }
+.row select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; }
+.hint { color: var(--text-3); font-size: 12px; }
+.list { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
+.list div { display: grid; grid-template-columns: 70px 1fr 56px; gap: 8px; align-items: center; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.list div:hover { background: var(--panel-hover); }
+.list .bar { height: 8px; border-radius: 2px; background: rgba(var(--heat), .85); }
+.heads { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.heads canvas { width: 100%; aspect-ratio: 1; border-radius: 2px; cursor: pointer; image-rendering: pixelated; background: #2b2a27; outline: 2px solid transparent; }
+.heads canvas.sel { outline-color: var(--select); }
+table { width: 100%; border-collapse: collapse; }
+td, th { padding: 4px 6px; text-align: left; font-variant-numeric: tabular-nums; }
+th { color: var(--text-3); font-size: 11px; text-transform: uppercase; font-weight: 700; border-bottom: 1px solid var(--line); }
+td.n, th.n { text-align: right; }
+.legend { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-3); }
+.legend .ramp { flex: 1; height: 8px; border-radius: 3px; }
+.kv { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+.kv div { background: var(--panel-2); padding: 6px 8px; border-radius: 4px; }
+.kv .k { font-size: 10px; color: var(--text-3); text-transform: uppercase; font-weight: 700; }
+.kv .v { font-weight: 800; }
+.layers-box summary { list-style: none; cursor: pointer; padding: 12px 14px 6px; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .5px; font-weight: 700; }
+.layers-box summary::-webkit-details-marker { display: none; }
+.layers-box summary::after { content: " ▾"; }
+.layers-box:not([open]) summary::after { content: " ▸"; }
+
+/* phones and tablets: one column that the page scrolls (no nested scroll box fighting the canvas):
+   position picker, then the canvas, then the inspector; the layer list folds away */
+@media (max-width: 1100px), (pointer: coarse) and (max-width: 1366px) {
+  body { overflow: auto; height: auto; display: block; }
+  .app { display: flex; flex-direction: column; }
+  .side { overflow: visible; }
+  .stage { height: 62vh; height: 62svh; flex: none; }
+  /* width: max-content, or the centred toolbar shrinks to half the canvas and wraps */
+  .tools { flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 16px); bottom: 8px; }
+  .tools button { padding: 9px 10px; }   /* finger-sized */
+  .layer { padding: 9px 14px; }
+  .plyrow button { padding: 8px 14px; }
+  .bigboard { max-width: 520px; margin: 0 auto; }
+}
+/* phones: pinch replaces the zoom buttons, so the toolbar fits on one row */
+@media (max-width: 480px) { .tools .z, .tools .sep, #tIn, #tOut { display: none; } .tools button { padding: 8px 9px; } .tools { flex-wrap: nowrap; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="/pieces/cburnett/wN.svg" alt=""> Lc0 Live</div>
+  <nav class="nav"><a href="/live">Live boards</a><a href="/">Analysis</a><a href="/net" class="on">Net</a><a href="/stats">Dashboard</a><a href="/pieces">Pieces</a></nav>
+  <div class="helper" id="helper"><i></i><span id="helperText">checking…</span><button id="unload" title="Free the net's memory now">Unload</button></div>
+</header>
+
+<div class="app">
+  <aside class="side">
+    <h3>Position</h3>
+    <div class="pos">
+      <select id="gameSel"></select>
+      <div class="plyrow"><button id="pPrev">◀</button><input type="range" id="plySl" min="0" value="0"><button id="pNext">▶</button></div>
+      <div class="posinfo" id="posInfo"></div>
+    </div>
+    <details class="layers-box" id="layersBox" open><summary>Layers</summary><div class="layers" id="layers"></div></details>
+  </aside>
+
+  <main class="stage" id="stage">
+    <div class="world" id="world"><svg class="edges" id="edges"></svg></div>
+    <div class="tools">
+      <button id="tDelta" class="on" title="Colour blocks by how much each layer changed each square">Change</button>
+      <button id="tResid" title="Colour blocks by the size of each square's representation after the layer">Size</button>
+      <button id="tFfn" title="Colour blocks by the share of feed-forward neurons firing">Neurons</button>
+      <span class="sep"></span>
+      <button id="tPlay" title="Step through the layers (Space)">▶ Flow</button>
+      <span class="sep"></span>
+      <button id="tOut">−</button><span class="z" id="zoomLbl">100%</span><button id="tIn">+</button>
+      <button id="tFit" title="Fit (Shift+1)">Fit</button>
+    </div>
+    <div class="overlay" id="overlay" style="display:none"><div id="overlayMsg"></div></div>
+  </main>
+
+  <aside class="side" id="inspector"><div class="insp"><div class="hint">Select a block on the canvas.</div></div></aside>
+</div>
+
+<script src="/pieceset.js"></script>
+<script src="/board.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const { Board, fmtEval } = window.ChessUI;
+const LS = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const S = {
+  games: [], game: null, ply: 0, D: null, sel: LS.get("net.sel", "enc8"), metric: LS.get("net.metric", "delta"),
+  mode: "activity", query: null, neuron: { kind: "ffn", idx: 0 }, head: 0, cam: LS.get("net.cam", null) || { x: 0, y: 0, z: 1, fresh: true },
+  pos: LS.get("net.pos", {}), playing: false, busy: false, cache: {},
+};
+const pct = (v, d = 0) => (v * 100).toFixed(d) + "%";
+
+// tokens are squares from the side to move's view; flip ranks when Black is to move
+const tokSq = t => S.D.white_to_move ? t : (7 - (t >> 3)) * 8 + (t & 7);
+const sqTok = tokSq;
+const sqName = s => "abcdefgh"[s & 7] + ((s >> 3) + 1);
+
+// ------------------------------------------------------------ graph layout
+const NODES = [];
+function buildNodes(L) {
+  NODES.length = 0;
+  NODES.push({ id: "input", title: "Input", sub: "112 planes" }, { id: "embed", title: "Embedding", sub: "64 × 1024", layer: 0 });
+  for (let i = 1; i <= L; i++) NODES.push({ id: "enc" + i, title: "Encoder " + i, sub: "32 heads", layer: i });
+  NODES.push({ id: "policy", title: "Policy head", sub: "attention" }, { id: "value", title: "Value head", sub: "W / D / L" }, { id: "mlh", title: "Moves left", sub: "plies" });
+  const cols = 6, gx = 200, gy = 260;
+  NODES.forEach((n, i) => {
+    let x, y;
+    if (n.id === "policy") { x = 1; y = 4; } else if (n.id === "value") { x = 2.5; y = 4; } else if (n.id === "mlh") { x = 4; y = 4; }
+    else { const r = Math.floor(i / cols), c = i % cols; x = r % 2 ? cols - 1 - c : c; y = r; }  // snake
+    const saved = S.pos[n.id];
+    n.x = saved ? saved[0] : 40 + x * gx; n.y = saved ? saved[1] : 40 + y * gy;
+  });
+}
+const nodeById = id => NODES.find(n => n.id === id);
+const order = () => NODES.filter(n => !["policy", "value", "mlh"].includes(n.id));
+
+function renderGraph() {
+  const w = $("world");
+  w.querySelectorAll(".node").forEach(e => e.remove());
+  for (const n of NODES) {
+    const el = document.createElement("div");
+    el.className = "node" + (n.id === S.sel ? " sel" : "");
+    el.dataset.id = n.id;
+    el.style.left = n.x + "px"; el.style.top = n.y + "px";
+    el.innerHTML = `<div class="hd">${n.title}<span>${n.sub}</span></div><div class="bd"></div>`;
+    w.appendChild(el);
+    n.el = el;
+    hookNode(n);
+  }
+  fillNodes(); drawEdges(); renderLayers();
+}
+
+function drawEdges() {
+  const seq = order();
+  let d = "", flow = "";
+  // offsetWidth/Height are layout sizes, unaffected by the camera's zoom transform
+  const anchor = (n, side) => { const h = n.el.offsetHeight, w = n.el.offsetWidth;
+    return side === "out" ? [n.x + w / 2, n.y + h] : [n.x + w / 2, n.y]; };
+  const right = n => [n.x + n.el.offsetWidth, n.y + 70], left = n => [n.x, n.y + 70];
+  const curve = (a, b) => { const dx = Math.max(40, Math.abs(b[0] - a[0]) / 2); return `M${a[0]},${a[1]} C${a[0] + dx},${a[1]} ${b[0] - dx},${b[1]} ${b[0]},${b[1]} `; };
+  const vcurve = (a, b) => { const dy = Math.max(40, Math.abs(b[1] - a[1]) / 2); return `M${a[0]},${a[1]} C${a[0]},${a[1] + dy} ${b[0]},${b[1] - dy} ${b[0]},${b[1]} `; };
+  for (let i = 0; i < seq.length - 1; i++) {
+    const a = seq[i], b = seq[i + 1];
+    const sameRow = Math.abs(a.y - b.y) < 60;
+    let p;
+    if (sameRow) p = a.x < b.x ? curve(right(a), left(b)) : curve(right(b), left(a));  // snake rows run both ways
+    else p = vcurve(anchor(a, "out"), anchor(b, "in"));
+    const active = S.playing && S.sel === b.id;
+    if (active) flow += p; else d += p;
+  }
+  const last = seq[seq.length - 1];
+  for (const h of ["policy", "value", "mlh"]) { const n = nodeById(h); d += vcurve(anchor(last, "out"), anchor(n, "in")); }
+  $("edges").innerHTML = `<path d="${d}"/><path class="flow" d="${flow}"/>`;
+}
+
+// ------------------------------------------------------------ colours
+const css = getComputedStyle(document.documentElement);
+const HEAT = css.getPropertyValue("--heat").trim(), NEG = css.getPropertyValue("--neg").trim();
+const BOARD_HEAT = css.getPropertyValue("--heat-board").trim();
+// paint 64 values (indexed by real square) into a canvas, white at the bottom
+// on the big board (no base colour) the overlay stays translucent so the pieces and squares show through
+function paint(cv, vals, { signed = false, base = "#2b2a27", lo = null, hi = null, maxA = base ? 1 : 0.85, floor = base ? 0.1 : 0 } = {}) {
+  const POS = base ? HEAT : BOARD_HEAT;
+  const n = 8, ctx = cv.getContext("2d"); cv.width = n; cv.height = n;
+  const mn = lo ?? Math.min(...vals), mx = hi ?? Math.max(...vals);
+  const absmax = Math.max(Math.abs(mn), Math.abs(mx)) || 1;
+  ctx.clearRect(0, 0, n, n);
+  for (let s = 0; s < 64; s++) {
+    const x = s & 7, y = 7 - (s >> 3);
+    if (base) { ctx.fillStyle = base; ctx.fillRect(x, y, 1, 1); }
+    let a, rgb;
+    if (signed) { a = Math.abs(vals[s]) / absmax; rgb = vals[s] >= 0 ? POS : NEG; }
+    else { a = mx > mn ? (vals[s] - mn) / (mx - mn) : 0; rgb = POS; }
+    ctx.fillStyle = `rgba(${rgb}, ${((floor + (1 - floor) * a) * maxA).toFixed(3)})`;
+    if (a > 0.001) ctx.fillRect(x, y, 1, 1);
+  }
+}
+const toSquares = tokVals => { const out = new Array(64); for (let t = 0; t < 64; t++) out[tokSq(t)] = tokVals[t]; return out; };
+
+function layerVals(layer, metric = S.metric) {
+  const D = S.D;
+  if (metric === "ffn" && layer > 0) return toSquares(D.ffn_active[layer - 1]);
+  if (metric === "delta" && layer > 0) return toSquares(D.resid_delta[layer - 1]);
+  return toSquares(D.resid_norm[layer]);
+}
+const METRIC_TEXT = {
+  delta: ["how much this layer changed each square", "How much this layer changed each square's 1,024-number representation (size of the update)."],
+  resid: ["size of each square's representation", "Size (L2 norm) of each square's representation after this layer. LayerNorm keeps these close together."],
+  ffn: ["share of 1,536 neurons firing", "Share of the layer's 1,536 feed-forward neurons firing (> 0.5) at each square."],
+};
+
+// ------------------------------------------------------------ node contents
+function fillNodes() {
+  const D = S.D;
+  for (const n of NODES) {
+    const bd = n.el.querySelector(".bd");
+    if (!D) { bd.innerHTML = `<div class="meta">no position yet</div>`; continue; }
+    if (n.layer !== undefined) {
+      bd.innerHTML = `<canvas class="heat"></canvas>` + (n.layer > 0 ? `<div class="foc" title="Head focus: taller = the head looks at fewer squares"></div>` : "") +
+        `<div class="meta">${n.layer === 0 ? "size after embedding" : METRIC_TEXT[S.metric][0]}</div>`;
+      paint(bd.querySelector("canvas"), layerVals(n.layer, n.layer === 0 ? "resid" : S.metric));
+      if (n.layer > 0) {
+        const ent = D.attn_entropy[n.layer - 1], lnmax = Math.log(64);
+        bd.querySelector(".foc").innerHTML = ent.map((e, h) => `<span style="height:${Math.max(4, (1 - e / lnmax) * 100)}%" title="head ${h + 1}: entropy ${e.toFixed(2)}"></span>`).join("");
+      }
+    } else if (n.id === "input") {
+      bd.innerHTML = `<div class="mini"></div><div class="meta">${D.white_to_move ? "White" : "Black"} to move · ply ${D.ply + 1}</div>`;
+      const b = new Board(bd.querySelector(".mini"), { coords: false, animMs: 0 }); b.set(D.fen, { arrows: [{ uci: D.played.uci, w: .2, op: .8 }] });
+    } else if (n.id === "policy") {
+      bd.innerHTML = `<div class="mini"></div><div class="meta">net's top move <b style="color:#fff">${D.raw_policy[0].san}</b> ${pct(D.raw_policy[0].p)}</div>`;
+      const b = new Board(bd.querySelector(".mini"), { coords: false, animMs: 0 });
+      b.set(D.fen, { arrows: D.raw_policy.slice(0, 3).map((m, i) => ({ uci: m.uci, w: i ? .1 : .2, op: i ? .5 : .85 })) });
+    } else if (n.id === "value") {
+      const [w, d, l] = D.raw_wdl_white;
+      bd.innerHTML = `<div class="big">${fmtEval(D.raw_q)}</div><div class="wdl"><span style="flex:${w};background:#fff"></span><span style="flex:${d};background:#8b8987"></span><span style="flex:${l};background:#151412"></span></div>
+        <div class="meta">W ${pct(w)} · D ${pct(d)} · L ${pct(l)} (White)</div><div class="meta">search said ${fmtEval(D.search_q)}</div>`;
+    } else if (n.id === "mlh") {
+      bd.innerHTML = `<div class="big">${Math.round(D.raw_mlh)}</div><div class="meta">plies left, predicted</div><div class="meta">actually: ${D.actual_left}</div>`;
+    }
+  }
+  renderLayers();
+}
+
+function renderLayers() {
+  $("layers").innerHTML = NODES.map(n => `<div class="layer ${n.id === S.sel ? "sel" : ""}" data-id="${n.id}"><span class="ic">${n.layer !== undefined ? (n.layer || "E") : n.id === "input" ? "▦" : "◆"}</span>${n.title}${n.layer !== undefined && S.D ? '<canvas></canvas>' : ""}</div>`).join("");
+  $("layers").querySelectorAll(".layer").forEach(e => {
+    const n = nodeById(e.dataset.id), cv = e.querySelector("canvas");
+    if (cv) paint(cv, layerVals(n.layer, n.layer === 0 ? "resid" : S.metric), { base: "#2b2a27" });
+    e.onclick = () => { select(n.id); focusNode(n); };
+  });
+}
+
+// ------------------------------------------------------------ camera (pan / zoom)
+function applyCam() {
+  S.fitted = false;
+  const c = S.cam, w = $("world"), st = $("stage");
+  w.style.transform = `translate(${c.x}px, ${c.y}px) scale(${c.z})`;
+  const g = 24 * c.z;
+  st.style.backgroundSize = `${g}px ${g}px`;
+  st.style.backgroundPosition = `${c.x}px ${c.y}px`;
+  $("zoomLbl").textContent = Math.round(c.z * 100) + "%";
+  LS.set("net.cam", c);
+}
+function fit() {
+  const st = $("stage").getBoundingClientRect();
+  const xs = NODES.map(n => n.x), ys = NODES.map(n => n.y);
+  const x0 = Math.min(...xs) - 40, y0 = Math.min(...ys) - 40, x1 = Math.max(...xs) + 210, y1 = Math.max(...ys) + 280;
+  const z = Math.min(1.5, Math.max(0.15, Math.min(st.width / (x1 - x0), (st.height - 60) / (y1 - y0))));
+  S.cam = { z, x: (st.width - (x1 - x0) * z) / 2 - x0 * z, y: (st.height - 60 - (y1 - y0) * z) / 2 - y0 * z };
+  applyCam();
+  S.fitted = true;   // refit on resize / rotation until the user moves the camera
+}
+function zoomAt(f, cx, cy) {
+  const c = S.cam, z = Math.min(4, Math.max(0.1, c.z * f));
+  c.x = cx - (cx - c.x) * z / c.z; c.y = cy - (cy - c.y) * z / c.z; c.z = z; applyCam();
+}
+function focusNode(n) {
+  const st = $("stage").getBoundingClientRect(), c = S.cam;
+  const nx = n.x * c.z + c.x, ny = n.y * c.z + c.y;
+  if (nx < 20 || ny < 20 || nx > st.width - 200 * c.z || ny > st.height - 260 * c.z) {
+    c.x = st.width / 2 - (n.x + 84) * c.z; c.y = st.height / 2 - (n.y + 120) * c.z; applyCam();
+  }
+}
+const stage = $("stage");
+stage.addEventListener("wheel", e => {
+  e.preventDefault();
+  const r = stage.getBoundingClientRect();
+  if (e.ctrlKey || e.metaKey) zoomAt(Math.exp(-e.deltaY * 0.0025), e.clientX - r.left, e.clientY - r.top);  // pinch / ctrl+wheel: zoom
+  else if (e.shiftKey) { S.cam.x -= e.deltaY; applyCam(); }
+  else { S.cam.x -= e.deltaX; S.cam.y -= e.deltaY; applyCam(); }                                          // wheel: pan, like Figma
+}, { passive: false });
+// One gesture system for mouse, pen and touch:
+//  - drag anywhere (also on a block's body) pans; drag a block's title bar moves the block
+//  - a tap/click without moving selects the block under it
+//  - two fingers pinch-zoom around their midpoint and pan with it
+//  - double-tap empty canvas fits everything
+let spaceDown = false;
+const ptrs = new Map();   // pointerId -> {x, y}
+let G = null;             // current gesture
+const TAP_SLOP = 8;       // px a finger may wiggle and still count as a tap
+let lastTap = { t: 0, x: 0, y: 0 };
+const local = (x, y) => { const r = stage.getBoundingClientRect(); return [x - r.left, y - r.top]; };
+function pinchState() {
+  const [a, b] = [...ptrs.values()];
+  return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+}
+stage.addEventListener("pointerdown", e => {
+  if (e.target.closest(".tools") || e.target.closest(".overlay")) return;
+  if (e.pointerType === "mouse" && e.button !== 0 && e.button !== 1) return;
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  try { stage.setPointerCapture(e.pointerId); } catch {}  // keep moves coming if the finger leaves the canvas
+  if (ptrs.size === 2) {           // second finger: switch to pinch, cancel any pan / block drag
+    const p = pinchState();
+    G = { type: "pinch", d0: p.d, mx: p.mx, my: p.my, z0: S.cam.z, cx: S.cam.x, cy: S.cam.y };
+    return;
+  }
+  if (ptrs.size > 2) return;
+  const nodeEl = e.target.closest(".node"), onHeader = e.target.closest(".hd");
+  const n = nodeEl && nodeById(nodeEl.dataset.id);
+  G = (n && onHeader && !spaceDown && e.button === 0)
+    ? { type: "node", n, x: e.clientX, y: e.clientY, nx: n.x, ny: n.y, moved: false }
+    : { type: "pan", n, x: e.clientX, y: e.clientY, cx: S.cam.x, cy: S.cam.y, moved: false };
+});
+stage.addEventListener("pointermove", e => {
+  if (!ptrs.has(e.pointerId) || !G) return;
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (G.type === "pinch" && ptrs.size >= 2) {
+    const p = pinchState(), z = Math.min(4, Math.max(0.1, G.z0 * p.d / G.d0));
+    const [m0x, m0y] = local(G.mx, G.my), [m1x, m1y] = local(p.mx, p.my);
+    // keep the world point under the starting midpoint under the fingers' current midpoint
+    S.cam.z = z; S.cam.x = m1x - (m0x - G.cx) * z / G.z0; S.cam.y = m1y - (m0y - G.cy) * z / G.z0;
+    applyCam(); return;
+  }
+  const dx = e.clientX - G.x, dy = e.clientY - G.y;
+  if (!G.moved && Math.hypot(dx, dy) < TAP_SLOP) return;
+  G.moved = true;
+  if (G.type === "pan") { S.cam.x = G.cx + dx; S.cam.y = G.cy + dy; stage.classList.add("panning"); applyCam(); }
+  else if (G.type === "node") {
+    const n = G.n; n.x = G.nx + dx / S.cam.z; n.y = G.ny + dy / S.cam.z;
+    n.el.style.left = n.x + "px"; n.el.style.top = n.y + "px"; drawEdges();
+  }
+});
+function endPointer(e) {
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.delete(e.pointerId);
+  stage.classList.remove("panning");
+  if (!G) return;
+  if (G.type === "pinch") {        // one finger left: continue as a pan from where it is, never as a tap
+    if (ptrs.size === 1) { const [p] = [...ptrs.values()]; G = { type: "pan", x: p.x, y: p.y, cx: S.cam.x, cy: S.cam.y, moved: true }; }
+    else if (ptrs.size === 0) G = null;
+    return;
+  }
+  if (ptrs.size) return;
+  if (e.type === "pointerup" && !G.moved) {
+    if (G.n) select(G.n.id);
+    else {                          // tap on empty canvas: double-tap fits
+      const now = performance.now();
+      if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) { fit(); lastTap.t = 0; }
+      else lastTap = { t: now, x: e.clientX, y: e.clientY };
+    }
+  }
+  if (G.type === "node" && G.moved) { S.pos[G.n.id] = [G.n.x, G.n.y]; LS.set("net.pos", S.pos); }
+  G = null;
+}
+stage.addEventListener("pointerup", endPointer);
+stage.addEventListener("pointercancel", endPointer);
+
+function hookNode() {}  // gestures are handled once on the stage (see above)
+
+// ------------------------------------------------------------ selection & inspector
+function select(id) {
+  if (S.sel === id && document.querySelector(".insp")?.dataset.id === id) return;
+  S.sel = id; LS.set("net.sel", id);
+  document.querySelectorAll(".node").forEach(e => e.classList.toggle("sel", e.dataset.id === id));
+  document.querySelectorAll(".layer").forEach(e => e.classList.toggle("sel", e.dataset.id === id));
+  drawEdges(); inspect();
+}
+
+function bigBoard(host) {
+  host.innerHTML = `<div class="bigboard"><div class="b"></div><canvas class="cb-heat"></canvas><div class="hit"></div></div>`;
+  const wrap = host.querySelector(".bigboard"), b = new Board(wrap.querySelector(".b"), { coords: true, animMs: 0 });
+  const heat = wrap.querySelector(".cb-heat");
+  // put the heat layer between the squares and the pieces
+  b.el.insertBefore(heat, b.pcLayer);
+  heat.style.zIndex = 1; b.pcLayer.style.zIndex = 2;
+  return { b, heat, hit: wrap.querySelector(".hit"), wrap };
+}
+function onSquare(hit, fn) {
+  hit.onclick = e => { const r = hit.getBoundingClientRect(); const f = Math.floor((e.clientX - r.left) / r.width * 8), rk = 7 - Math.floor((e.clientY - r.top) / r.height * 8);
+    if (f >= 0 && f < 8 && rk >= 0 && rk < 8) fn(rk * 8 + f); };
+}
+async function api(path) {
+  const r = await fetch(path); const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  return j;
+}
+const keyQ = () => "key=" + encodeURIComponent(S.D.key);
+
+function legend(signed, lo, hi, label) {
+  const g = signed ? `linear-gradient(90deg, rgba(${NEG},1), rgba(${NEG},0) 50%, rgba(${BOARD_HEAT},0) 50%, rgba(${BOARD_HEAT},.85))` : `linear-gradient(90deg, rgba(${BOARD_HEAT},0), rgba(${BOARD_HEAT},.85))`;
+  return `<div class="legend"><span>${lo}</span><div class="ramp" style="background:${g}"></div><span>${hi}</span></div><div class="hint">${label}</div>`;
+}
+
+async function inspect() {
+  const I = $("inspector"), D = S.D, n = nodeById(S.sel);
+  if (!D || !n) { I.innerHTML = `<div class="insp"><div class="hint">Select a block on the canvas.</div></div>`; return; }
+  I.innerHTML = `<div class="insp" data-id="${n.id}"><h2>${n.title}</h2><div class="sub"></div><div id="ib"></div></div>`;
+  const sub = I.querySelector(".sub"), ib = I.querySelector("#ib");
+  if (n.layer !== undefined) return inspectLayer(n, sub, ib);
+  if (n.id === "input") {
+    sub.textContent = `The position as lc0 saw it: 8 positions of history × 13 planes, plus castling, side to move and the 50-move counter.`;
+    const { b } = bigBoard(ib); b.set(D.fen, { arrows: [{ uci: D.played.uci, w: .18, op: .85 }] });
+    ib.insertAdjacentHTML("beforeend", `<div class="kv" style="margin-top:10px">${[["To move", D.white_to_move ? "White" : "Black"], ["Ply", `${D.ply + 1} / ${D.plies}`], ["Played", D.played.san], ["Search visits", D.visits]].map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>
+      <div class="hint">The arrow is the move that was actually played next.</div>`);
+  } else if (n.id === "policy") return inspectPolicy(sub, ib);
+  else if (n.id === "value") {
+    const [w, d, l] = D.raw_wdl_white, sq = D.search_q, sd = D.search_d, sw = (1 + sq - sd) / 2, sl = (1 - sq - sd) / 2;
+    sub.textContent = "Win / draw / loss from White's side: the raw network vs. after 800 visits of search.";
+    const bar = (W, Dd, Lw) => `<div style="display:flex;height:22px;border-radius:4px;overflow:hidden;gap:2px"><span style="flex:${W};background:#fff"></span><span style="flex:${Dd};background:#8b8987"></span><span style="flex:${Lw};background:#151412"></span></div>`;
+    ib.innerHTML = `<table><tr><th></th><th class="n">White wins</th><th class="n">Draw</th><th class="n">Black wins</th><th class="n">Eval</th></tr>
+      <tr><td>Raw net</td><td class="n">${pct(w, 1)}</td><td class="n">${pct(d, 1)}</td><td class="n">${pct(l, 1)}</td><td class="n">${fmtEval(D.raw_q)}</td></tr>
+      <tr><td>Search</td><td class="n">${pct(sw, 1)}</td><td class="n">${pct(sd, 1)}</td><td class="n">${pct(sl, 1)}</td><td class="n">${fmtEval(sq)}</td></tr></table>
+      <div style="margin-top:10px">Raw net${bar(w, d, l)}</div><div style="margin-top:8px">Search${bar(sw, sd, sl)}</div>
+      <p class="hint">The difference is what 800 visits of look-ahead changed about the network's first impression.</p>`;
+  } else if (n.id === "mlh") {
+    sub.textContent = "How many more plies the network expects this game to last.";
+    ib.innerHTML = `<div class="kv">${[["Raw net", Math.round(D.raw_mlh)], ["After search", Math.round(D.search_mlh)], ["Actually left", D.actual_left], ["Error", `${D.raw_mlh - D.actual_left > 0 ? "+" : ""}${Math.round(D.raw_mlh - D.actual_left)}`]].map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>
+      <p class="hint">Training games often end early by resignation, which is one reason this head tends to predict games running longer than they do.</p>`;
+  }
+}
+
+async function inspectPolicy(sub, ib) {
+  const D = S.D;
+  sub.textContent = "The network's raw move preferences (no search) vs. how the 800 search visits were split. Click a piece to see where the policy head wants it to go.";
+  const view = S.policyView || "raw";
+  ib.innerHTML = `<div class="tabs"><button data-v="raw" class="${view === "raw" ? "on" : ""}">Raw net</button><button data-v="search" class="${view === "search" ? "on" : ""}">Search</button></div><div id="pb" style="margin-top:10px"></div><div id="pmapHint" class="hint"></div>
+    <table style="margin-top:10px"><tr><th>Move</th><th class="n">Raw net</th><th class="n">Search</th></tr>
+    ${[...new Set([...D.raw_policy.slice(0, 6), ...D.search_policy.slice(0, 6)].map(m => m.uci))].map(u => {
+      const r = D.raw_policy.find(m => m.uci === u), s = D.search_policy.find(m => m.uci === u), m = r || s;
+      return `<tr><td><b>${m.san}</b>${u === D.played.uci ? ' <span class="hint">played</span>' : ""}</td><td class="n">${r ? pct(r.p, 1) : "<8th"}</td><td class="n">${s ? pct(s.p, 1) : "<8th"}</td></tr>`; }).join("")}</table>`;
+  ib.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { S.policyView = b.dataset.v; inspectPolicy(sub, ib); });
+  const { b, heat, hit } = bigBoard(ib.querySelector("#pb"));
+  const list = view === "raw" ? D.raw_policy : D.search_policy;
+  b.set(D.fen, { arrows: list.slice(0, 5).map((m, i) => ({ uci: m.uci, w: i ? .1 : .2, op: Math.max(.3, Math.min(.9, m.p * 2)) })) });
+  onSquare(hit, async s => {
+    const r = await api(`/api/net/pmap?${keyQ()}&token=${sqTok(s)}`);
+    const v = toSquares(r.values), mx = Math.max(...v), ex = v.map(x => Math.exp(x - mx)), tot = ex.reduce((a, x) => a + x, 0);
+    paint(heat, ex.map(x => x / tot), { base: null, lo: 0 }); b.set(D.fen, { arrows: [] });
+    $("pmapHint").innerHTML = `From <b>${sqName(s)}</b>: brighter = the policy head scores a move to that square higher (softmax over all 64 targets, legal or not).`;
+  });
+}
+
+async function inspectLayer(n, sub, ib) {
+  const D = S.D, L = n.layer;
+  const enc = L > 0;
+  sub.textContent = enc ? `Self-attention (32 heads) + feed-forward (1,536 neurons), applied to all 64 squares.` : `Each square's 1,024-number starting representation, before any attention.`;
+  const modes = enc ? [["activity", "Activity"], ["neuron", "Neuron"], ["attention", "Attention"]] : [["activity", "Activity"], ["neuron", "Neuron"]];
+  if (!modes.some(m => m[0] === S.mode)) S.mode = "activity";
+  ib.innerHTML = `<div class="tabs">${modes.map(([k, l]) => `<button data-m="${k}" class="${S.mode === k ? "on" : ""}">${l}</button>`).join("")}</div><div id="mb" style="margin-top:10px"></div><div id="mx" style="margin-top:10px"></div>`;
+  ib.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { S.mode = b.dataset.m; inspectLayer(n, sub, ib); });
+  const { b, heat, hit } = bigBoard(ib.querySelector("#mb"));
+  const mx = ib.querySelector("#mx");
+  b.set(D.fen, {});
+
+  if (S.mode === "activity") {
+    const metric = enc ? S.metric : "resid";
+    const vals = layerVals(L, metric);
+    paint(heat, vals, { base: null });
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    mx.innerHTML = legend(false, metric === "ffn" ? pct(lo) : lo.toFixed(1), metric === "ffn" ? pct(hi) : hi.toFixed(1), METRIC_TEXT[metric][1])
+      + `<p class="hint">Click a square to list the neurons firing hardest there.</p><div id="topList"></div>`;
+    onSquare(hit, async s => {
+      const kind = enc ? "ffn" : "resid", layer = enc ? L - 1 : 0;
+      const r = await api(`/api/net/top?${keyQ()}&kind=${kind}&layer=${layer}&token=${sqTok(s)}`);
+      const top = r.top, m = Math.max(...top.map(t => Math.abs(t[1])));
+      paint(heat, vals.map((v, i) => i === s ? hi : v * 0.35), { base: null });
+      mx.querySelector("#topList").innerHTML = `<div class="hint" style="margin-bottom:4px">Top neurons at <b>${sqName(s)}</b> (click one to see where else it fires)</div><div class="list">` +
+        top.map(([i, v]) => `<div data-i="${i}"><span>#${i}</span><span class="bar" style="width:${Math.abs(v) / m * 100}%"></span><span class="n">${v.toFixed(2)}</span></div>`).join("") + `</div>`;
+      mx.querySelectorAll(".list div").forEach(d => d.onclick = () => { S.neuron = { kind, idx: +d.dataset.i }; S.mode = "neuron"; inspectLayer(n, sub, ib); });
+    });
+  } else if (S.mode === "neuron") {
+    const kinds = enc ? [["ffn", "Feed-forward (1,536)"], ["resid", "Residual (1,024)"]] : [["resid", "Residual (1,024)"]];
+    if (!enc) S.neuron.kind = "resid";
+    const max = S.neuron.kind === "ffn" ? 1535 : 1023;
+    S.neuron.idx = Math.min(S.neuron.idx, max);
+    mx.innerHTML = `<div class="row"><select id="nk">${kinds.map(([k, l]) => `<option value="${k}" ${k === S.neuron.kind ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <label>#</label><input type="number" id="ni" min="0" max="${max}" value="${S.neuron.idx}"><button class="btn" id="nprev">◀</button><button class="btn" id="nnext">▶</button><button class="btn" id="nrand">Random</button></div><div id="nleg" style="margin-top:8px"></div>`;
+    const load = async () => {
+      const layer = S.neuron.kind === "ffn" ? L - 1 : L;
+      const r = await api(`/api/net/neuron?${keyQ()}&kind=${S.neuron.kind}&layer=${layer}&neuron=${S.neuron.idx}`);
+      const v = toSquares(r.values), signed = S.neuron.kind === "resid";
+      paint(heat, v, { base: null, signed, lo: signed ? null : 0 });
+      const lo = Math.min(...v), hi = Math.max(...v);
+      mx.querySelector("#nleg").innerHTML = legend(signed, lo.toFixed(2), hi.toFixed(2),
+        signed ? `Residual channel #${S.neuron.idx}: orange = positive, blue = negative.` : `Neuron #${S.neuron.idx}'s output at each square (Mish activation; firing = bright).`);
+    };
+    const set = i => { S.neuron.idx = Math.max(0, Math.min(max, i)); mx.querySelector("#ni").value = S.neuron.idx; load(); };
+    mx.querySelector("#nk").onchange = e => { S.neuron.kind = e.target.value; inspectLayer(n, sub, ib); };
+    mx.querySelector("#ni").onchange = e => set(+e.target.value);
+    mx.querySelector("#nprev").onclick = () => set(S.neuron.idx - 1);
+    mx.querySelector("#nnext").onclick = () => set(S.neuron.idx + 1);
+    mx.querySelector("#nrand").onclick = () => set(Math.floor(Math.random() * (max + 1)));
+    load();
+  } else if (S.mode === "attention") {
+    mx.innerHTML = `<p class="hint">Click a square on the board: each small board shows where one of the 32 heads makes that square look. Click a head to show it on the big board.</p><div class="heads" id="heads"></div><div id="aleg"></div>`;
+    const show = async s => {
+      S.query = s;
+      const r = await api(`/api/net/attn?${keyQ()}&layer=${L - 1}&token=${sqTok(s)}`);
+      const heads = r.heads.map(toSquares);
+      const box = mx.querySelector("#heads");
+      box.innerHTML = heads.map((_, h) => `<canvas data-h="${h}" class="${h === S.head ? "sel" : ""}" title="head ${h + 1}"></canvas>`).join("");
+      box.querySelectorAll("canvas").forEach(cv => { const h = +cv.dataset.h; paint(cv, heads[h], { lo: 0 });
+        cv.onclick = () => { S.head = h; box.querySelectorAll("canvas").forEach(c => c.classList.toggle("sel", c === cv)); big(); }; });
+      const big = () => {
+        const v = heads[S.head]; paint(heat, v, { base: null, lo: 0 });
+        const top = v.map((x, i) => [x, i]).sort((a, b) => b[0] - a[0]).slice(0, 3);
+        b.set(D.fen, { arrows: top.filter(([, i]) => i !== s).map(([x, i]) => ({ uci: sqName(s) + sqName(i), w: .12, op: Math.max(.35, Math.min(.9, x * 3)) })) });
+        mx.querySelector("#aleg").innerHTML = legend(false, "0%", pct(top[0][0]), `Head ${S.head + 1}, from <b>${sqName(s)}</b>: brighter = more attention. Arrows point to its top targets. Focus entropy ${D.attn_entropy[L - 1][S.head].toFixed(2)} (lower = sharper).`);
+      };
+      big();
+    };
+    onSquare(hit, show);
+    if (S.query != null) show(S.query);
+  }
+}
+
+// ------------------------------------------------------------ data
+async function loadGames() {
+  const { games } = await fetch("/api/games").then(r => r.json());
+  S.games = games.slice(0, 200);
+  $("gameSel").innerHTML = S.games.map(g => `<option value="${g.id}">${g.game.replace("game_", "#").replace(/#0+(\d)/, "#$1")} · ${g.result.replace("1/2-1/2", "½")} · ${g.positions} plies · ${new Date(g.time * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</option>`).join("");
+}
+
+let evalSeq = 0;
+async function evaluate() {
+  if (!S.game) return;
+  const my = ++evalSeq;
+  $("posInfo").textContent = "evaluating…";
+  try {
+    const r = await fetch(`/api/net/eval?game=${encodeURIComponent(S.game)}&ply=${S.ply}`);
+    const j = await r.json();
+    if (my !== evalSeq) return;
+    if (r.status === 202) { overlay(`<b>Preparing the net…</b>Converting ${j.status.net} with lc0's own converter and exposing its layers. This takes about 15 seconds, once per net.`); setTimeout(evaluate, 3000); return; }
+    if (j.error) throw new Error(j.error);
+    overlay(null);
+    S.D = j; S.ply = j.ply;
+    $("plySl").max = j.plies - 1; $("plySl").value = j.ply;
+    $("posInfo").innerHTML = `Ply ${j.ply + 1}/${j.plies} · ${j.white_to_move ? "White" : "Black"} to move · played <b style="color:#fff">${j.played.san}</b><br>net ${j.net} · ${j.ms} ms`;
+    history.replaceState(null, "", `/net?game=${encodeURIComponent(S.game)}&ply=${S.ply}`);
+    fillNodes(); drawEdges(); inspect(); status();
+  } catch (e) { if (my === evalSeq) { $("posInfo").textContent = "error: " + e.message; } }
+}
+function overlay(html) { $("overlay").style.display = html ? "grid" : "none"; if (html) $("overlayMsg").innerHTML = html; }
+
+async function status() {
+  try {
+    const s = await fetch("/api/net/status").then(r => r.json());
+    const h = s.helper;
+    $("helper").classList.toggle("on", !!h);
+    $("helperText").textContent = !s.venv ? "net helper not installed (see README)"
+      : h ? `net ${s.net} loaded · ${h.mem_mb ?? "?"} MB · unloads after 5 idle min` : `net ${s.net || "?"} not loaded · 0 MB`;
+    $("unload").style.display = h ? "" : "none";
+  } catch {}
+}
+$("unload").onclick = async () => { await fetch("/api/net/stop"); status(); };
+
+// ------------------------------------------------------------ controls
+$("gameSel").onchange = e => { S.game = e.target.value; S.ply = 0; evaluate(); };
+let plyT; $("plySl").oninput = e => { S.ply = +e.target.value; clearTimeout(plyT); plyT = setTimeout(evaluate, 120); };
+$("pPrev").onclick = () => { S.ply = Math.max(0, S.ply - 1); evaluate(); };
+$("pNext").onclick = () => { S.ply = S.ply + 1; evaluate(); };
+const setMetric = m => { S.metric = m; LS.set("net.metric", m);
+  for (const [id, k] of [["tDelta", "delta"], ["tResid", "resid"], ["tFfn", "ffn"]]) $(id).classList.toggle("on", m === k);
+  fillNodes(); if (S.mode === "activity") inspect(); };
+$("tDelta").onclick = () => setMetric("delta"); $("tResid").onclick = () => setMetric("resid"); $("tFfn").onclick = () => setMetric("ffn");
+$("tIn").onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(1.25, r.width / 2, r.height / 2); };
+$("tOut").onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(0.8, r.width / 2, r.height / 2); };
+$("tFit").onclick = fit;
+async function play() {
+  if (S.playing) { S.playing = false; $("tPlay").classList.remove("on"); $("tPlay").textContent = "▶ Flow"; drawEdges(); return; }
+  S.playing = true; S.mode = "activity"; $("tPlay").classList.add("on"); $("tPlay").textContent = "■ Stop";
+  const seq = order().filter(n => n.layer !== undefined);
+  for (const n of seq) {
+    if (!S.playing) return;
+    select(n.id); focusNode(n);
+    n.el.classList.add("pulse"); setTimeout(() => n.el.classList.remove("pulse"), 650);
+    await new Promise(r => setTimeout(r, 700));
+  }
+  S.playing = false; $("tPlay").classList.remove("on"); $("tPlay").textContent = "▶ Flow"; drawEdges();
+}
+$("tPlay").onclick = play;
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.code === "Space") { e.preventDefault(); if (!spaceDown) { spaceDown = true; stage.style.cursor = "grab"; } }
+  if (e.shiftKey && e.key === "!") fit();
+  if (e.shiftKey && e.code === "Digit0") { const r = stage.getBoundingClientRect(); zoomAt(1 / S.cam.z, r.width / 2, r.height / 2); }
+  if (e.key === "ArrowLeft") $("pPrev").click();
+  if (e.key === "ArrowRight") $("pNext").click();
+  if (e.key === "=" || e.key === "+") $("tIn").click();
+  if (e.key === "-") $("tOut").click();
+  if (e.key === "f") play();
+});
+document.addEventListener("keyup", e => { if (e.code === "Space") { spaceDown = false; stage.style.cursor = ""; } });
+PieceSet.onChange(() => { fillNodes(); inspect(); });
+// refit when the canvas itself changes size (rotation, window resize), but only if the user hasn't moved the view;
+// watching the canvas, not the window, means the new size is already laid out when this runs
+let rsT; new ResizeObserver(() => { clearTimeout(rsT); rsT = setTimeout(() => { drawEdges(); if (S.fitted) fit(); }, 60); }).observe($("stage"));
+
+(async () => {
+  for (const [id, k] of [["tDelta", "delta"], ["tResid", "resid"], ["tFfn", "ffn"]]) $(id).classList.toggle("on", S.metric === k);
+  // on phones and tablets the canvas already shows every layer; fold the list so the canvas is near the top
+  if (matchMedia("(max-width: 1100px), (pointer: coarse) and (max-width: 1366px)").matches) $("layersBox").open = false;
+  buildNodes(15); renderGraph();
+  if (S.cam.fresh) setTimeout(fit, 0); else applyCam();
+  await loadGames();
+  const q = new URLSearchParams(location.search);
+  S.game = q.get("game") && S.games.some(g => g.id === q.get("game")) ? q.get("game") : S.games[0]?.id;
+  S.ply = +(q.get("ply") || 30);
+  if (S.game) { $("gameSel").value = S.game; evaluate(); }
+  status(); setInterval(status, 10000);
+})();
+</script>
+</body>
+</html>
