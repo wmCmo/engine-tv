@@ -1,4 +1,4 @@
-# fishtest-tv
+# fishtest: the Stockfish app
 
 A local dashboard, an across-the-room "TV" view and a phone remote for a [Fishtest](https://tests.stockfishchess.org/)
 worker on Windows. It never modifies the worker: it reads the worker's logs and result files, and Fishtest's and

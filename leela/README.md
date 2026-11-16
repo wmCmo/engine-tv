@@ -1,4 +1,4 @@
-# lc0-viz
+# leela: the Lc0 app
 
 A live dashboard for the games your Lc0 training client plays, styled like a chess.com analysis board.
 

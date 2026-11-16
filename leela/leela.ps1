@@ -1,4 +1,4 @@
-# Start / stop the Lc0 training client and the lc0-viz dashboard, in the style of `fishtest`.
+# Start / stop the Lc0 training client and the Leela dashboard, in the style of `fishtest`.
 #   leela            client (training games only) + dashboard; skips whatever is already running
 #   leela stop       stop the client and lc0.exe, freeing the GPU (the dashboard keeps running)
 #   leela stop all   also stop the dashboard (and the Net explorer's helper with it)
