@@ -1,118 +1,44 @@
-"""Build the TV's chess pieces from the artwork in art/ and write them into tv.html.
+"""Build the TV's chess pieces from art/staunty/ and write them into tv.html.
 
     python tools/build_pieces.py
 
-art/pieces.svg       rook, knight, bishop and pawn for both colours, original artwork (one Figma frame)
-art/queen-king.svg   queen and king, in groups named white-queen, white-king, black-queen, black-king
+art/staunty/   the Staunty piece set by sadsnake1 (from lichess-org/lila), one SVG per piece,
+               wK.svg ... bP.svg, each drawn to fill a 50x50 square with the bases on a shared line.
+               Licence: CC BY-NC-SA 4.0, separate from this repo's MIT licence (see art/staunty/README.md).
 
-Each piece becomes one 120x120 box with its base on the same line, so pieces of different heights
-stand level on the board. The result replaces the block between the PIECES markers in tv.html.
+Each piece becomes one entry {box, svg}: `box` is the file's own viewBox, `svg` its contents.
+The result replaces the block between the PIECES markers in tv.html.
 """
 import json
 import os
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FRAME = os.path.join(ROOT, "art", "pieces.svg")
-QK = os.path.join(ROOT, "art", "queen-king.svg")
+ART = os.path.join(ROOT, "art", "staunty")
 TV = os.path.join(ROOT, "tv.html")
-BASELINE = 110.5  # y of every piece's base inside its 120x120 box
 
-# Where each piece sits in the Figma frame (roughly its centre), to sort the frame's shapes into pieces
-CENTRES = {
-    "br": (161, 128), "bn": (273, 128), "bb": (394, 127), "bp": (974, 248),
-    "wr": (161, 941), "wn": (273, 941), "wb": (394, 938), "wp": (974, 828),
-}
-# The frame repeats rook, knight and bishop on the right-hand side; those copies are mirrors of these
-MIRRORS = {(974, 128): "br", (863, 128): "bn", (742, 127): "bb",
-           (974, 941): "wr", (863, 941): "wn", (742, 938): "wb"}
-
-# Black is lifted a little: the original tones get muddy on the TV's lighter squares (#2a404c)
-BLACK_LIFT = {"#556B7B": "#647F8F", "#2E4753": "#3B5664", "#7D99A4": "#8FAAB6"}
-
-ELEMENT = re.compile(r"<(path|ellipse|circle|rect)\b[^>]*/>")
-NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
+ROOT_SVG = re.compile(r"<svg\b([^>]*)>(.*)</svg>\s*$", re.S)
 
 
-def anchor(el):
-    """A point inside the shape: the circle/ellipse centre, else the first point of the path."""
-    cx, cy = re.search(r'\bcx="([\d.]+)"', el), re.search(r'\bcy="([\d.]+)"', el)
-    if cx and cy:
-        return float(cx.group(1)), float(cy.group(1))
-    d = re.search(r'\bd="M\s*([-\d.]+)[ ,]([-\d.]+)', el)
-    return (float(d.group(1)), float(d.group(2))) if d else None
-
-
-def bottom(el):
-    """Lowest y the shape reaches: ellipse/circle extent, or the largest y among a path's points
-    (control points included, which is close enough for these rounded shapes)."""
-    cy, ry, r = (re.search(fr'\b{k}="([\d.]+)"', el) for k in ("cy", "ry", "r"))
-    if cy:
-        return float(cy.group(1)) + float((ry or r).group(1))
-    d = re.search(r'\bd="([^"]+)"', el).group(1)
-    ys = []
-    for cmd, args in re.findall(r"([A-Za-z])([^A-Za-z]*)", d):
-        nums = [float(n) for n in NUMBER.findall(args)]
-        if cmd in "MLC":
-            ys += nums[1::2]  # x,y pairs
-        elif cmd == "V":
-            ys += nums  # y only
-        elif cmd in "HZ":
-            pass  # x only / close
-        else:
-            raise SystemExit(f"path command {cmd!r} not handled; export the art with absolute M/L/H/V/C/Z")
-    return max(ys)
-
-
-def frame_pieces():
-    src = open(FRAME, encoding="utf-8").read()
-    groups = {k: [] for k in CENTRES}
-    for m in ELEMENT.finditer(src):
-        el = m.group(0)
-        if 'fill="white"' in el or 'fill="#D9D9D9"' in el:
-            continue  # background, the bishop's painted slit (it must be a real gap) and a hidden placeholder
-        pt = anchor(el)
-        if pt is None:
-            continue
-        # (key, centre) for every piece in the frame, the right-hand copies included
-        spots = list(CENTRES.items()) + [(key, centre) for centre, key in MIRRORS.items()]
-        key, centre = min(spots, key=lambda kc: (kc[1][0] - pt[0]) ** 2 + (kc[1][1] - pt[1]) ** 2)
-        if centre == CENTRES[key]:  # skip the right-hand copies
-            groups[key].append(el)
-    out = {}
-    for key, els in groups.items():
-        cx = CENTRES[key][0]
-        low = max(bottom(e) for e in els)
-        art = "".join(els)
-        if key[0] == "b":
-            for a, b in BLACK_LIFT.items():
-                art = art.replace(a, b)
-        out[key] = {"box": f"{cx - 60:g} {low - BASELINE:g} 120 120", "svg": art}
-    return out
-
-
-def queen_king():
-    src = open(QK, encoding="utf-8").read()
-    names = {"white-queen": "wq", "white-king": "wk", "black-queen": "bq", "black-king": "bk"}
-    out = {}
-    for name, key in names.items():
-        m = re.search(fr'<g id="{name}" transform="translate\([\d.]+ 0\)">(.*?)</g></g>', src, re.S)
-        if m is None:
-            raise SystemExit(f"group {name!r} not found in {QK}")
-        art = m.group(1) + "</g>"  # drop the outer group's layout offset; the piece is drawn in 0..120
-        if key[0] == "b":
-            for a, b in BLACK_LIFT.items():
-                art = art.replace(a, b)
-        out[key] = {"box": "0 0 120 120", "svg": art}
-    return out
+def piece(path):
+    m = ROOT_SVG.search(open(path, encoding="utf-8").read())
+    if m is None:
+        raise SystemExit(f"no <svg> root in {path}")
+    attrs, body = m.groups()
+    box = re.search(r'\bviewBox="([^"]+)"', attrs).group(1)
+    # the root's fill-rule/clip-rule apply to every shape, so keep them on a wrapping group
+    return {"box": box, "svg": f'<g fill-rule="evenodd" clip-rule="evenodd">{body}</g>'}
 
 
 def main():
-    pieces = {**frame_pieces(), **queen_king()}
-    missing = {c + t for c in "wb" for t in "kqrbnp"} - set(pieces)
-    if missing:
-        raise SystemExit(f"missing pieces: {sorted(missing)}")
-    block = ("// <PIECES> generated by tools/build_pieces.py from art/; edit the art, not this block\n"
+    pieces = {}
+    for c in "wb":
+        for t in "kqrbnp":
+            path = os.path.join(ART, f"{c}{t.upper()}.svg")
+            if not os.path.exists(path):
+                raise SystemExit(f"missing piece: {path}")
+            pieces[c + t] = piece(path)
+    block = ("// <PIECES> generated by tools/build_pieces.py from art/staunty/; edit the art, not this block\n"
              f"const PIECE_ART = {json.dumps(pieces, separators=(',', ':'))}\n"
              "// </PIECES>")
     html = open(TV, encoding="utf-8", newline="").read()
