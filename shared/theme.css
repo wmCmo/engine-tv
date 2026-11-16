@@ -1,0 +1,39 @@
+/* engine-tv's shared look ("the blend"): colours and typefaces both apps use.
+   Each page keeps its own layout CSS and reads these tokens; change a colour here and both apps follow.
+   Rules: chess is the visual language (board colours, Staunty pieces as icons); no emoji, no uppercase micro-labels;
+   serif for headline numbers like a chess book, monospace for engine numbers, the system sans for everything else. */
+:root {
+  color-scheme: dark;
+
+  /* surfaces and ink: warm near-black, chess.com-style panels */
+  --page: #1f1d1b;
+  --surface: #262421;
+  --surface-2: #211f1d;
+  --rule: #3a3734;
+  --ink: #f3f1ec;
+  --ink-2: #bdb7ad;
+  --ink-3: #8c867c;
+
+  /* the board (read by shared/board.js) and the green that comes from it */
+  --sq-light: #ebecd0;
+  --sq-dark: #739552;
+  --hl-light: #f5f682;
+  --hl-dark: #b9ca43;
+  --light-sq: var(--sq-light);
+  --dark-sq: var(--sq-dark);
+  --accent: #81b64c;
+
+  /* chart series: this pair passes the colour-blindness and contrast checks on --surface */
+  --series-1: #6c9e3c;
+  --series-2: #3987e5;
+
+  /* results and states (always shown with a label, never colour alone) */
+  --good: #6c9e3c;
+  --bad: #d9605a;
+  --warn: #d9a441;
+  --neutral: #77726a;
+
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Noto Serif", serif;
+  --sans: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "Roboto Mono", monospace;
+}

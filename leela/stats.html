@@ -15,23 +15,13 @@
   no emoji, no uppercase micro-labels, no wall of cards; serif for headline numbers like a chess book, monospace
   for engine numbers; thin charts, with uncertainty where the data has it.
 -->
+<link rel="stylesheet" href="/shared/theme.css">
 <style>
+/* colours and fonts come from /shared/theme.css (shared with the fishtest monitor); these are this page's own */
 :root {
-  --page: #1f1d1b;          /* warm near-black */
-  --surface: #262421;       /* chess.com panel */
-  --rule: #3a3734;
-  --ink: #f3f1ec;
-  --ink-2: #bdb7ad;
-  --ink-3: #8c867c;
-  --light-sq: #ebecd0;
-  --dark-sq: #739552;
-  --accent: #81b64c;
-  --training: #6c9e3c;      /* chart series, validated (CVD + contrast) on --surface */
-  --match: #3987e5;
+  --training: var(--series-1);
+  --match: var(--series-2);
   --heat: 255, 96, 0;
-  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Noto Serif", serif;
-  --sans: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
-  --mono: ui-monospace, "Cascadia Mono", Consolas, "Roboto Mono", monospace;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }

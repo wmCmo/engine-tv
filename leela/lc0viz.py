@@ -421,6 +421,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send((ROOT / PAGES[path]).read_bytes(), "text/html; charset=utf-8")
         if path in SCRIPTS:
             return self._send(SCRIPTS[path].read_bytes(), "text/javascript; charset=utf-8")
+        if path == "/shared/theme.css":
+            return self._send((SHARED / "theme.css").read_bytes(), "text/css; charset=utf-8")
         m = re.fullmatch(r"/pieces/([a-z0-9-]+)/([wb][KQRBNP])\.(svg|webp)", path)
         if m:
             f = PIECES / m.group(1) / f"{m.group(2)}.{m.group(3)}"

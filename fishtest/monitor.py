@@ -115,7 +115,7 @@ def read_cfg():
 VENDOR = os.path.join(HERE, "vendor")
 # engine-tv/shared: the board component and piece library this app shares with leela/
 SHARED = os.path.join(os.path.dirname(HERE), "shared")
-SHARED_SCRIPT = re.compile(r"/shared/(board|pieceset)\.js")
+SHARED_SCRIPT = re.compile(r"/shared/(board\.js|pieceset\.js|theme\.css)")
 SHARED_PIECE = re.compile(r"/pieces/([a-z0-9-]+)/([wb][KQRBNP])\.(svg|webp)")
 RESULT_TOKENS = {"1-0", "0-1", "1/2-1/2", "*"}
 PGN_NAME = re.compile(r"^results-[0-9a-f]+-\d+\.pgn$")
@@ -574,41 +574,37 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Stockfish · Worker Monitor</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/shared/theme.css">
 <style>
 :root{
-  color-scheme:dark;
-  --bg:#0a0e0d; --panel:#101613; --panel2:#0d1310; --line:#1d2a23;
-  --text:#e7efe9; --muted:#7d8f85;
-  --green:#4cb26a; --green-b:#5fe08a; --glow:rgba(76,178,106,.35);
-  --red:#f0645b; --amber:#e2a13a; --blue:#5aa9f0; --violet:#b98cff;
-  --font:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+  /* the shared look (/shared/theme.css, same as the Leela dashboard), under this page's older token names */
+  --bg:var(--page); --panel:var(--surface); --panel2:var(--surface-2); --line:var(--rule);
+  --text:var(--ink); --muted:var(--ink-3);
+  --green:var(--good); --green-b:var(--accent); --glow:rgba(129,182,76,.25);
+  --red:var(--bad); --amber:var(--warn); --blue:var(--series-2); --violet:#b38ad9;
+  --font:var(--sans);
 }
 *{box-sizing:border-box}
-body{margin:0;font-family:var(--font);background:var(--bg);color:var(--text);
-  background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);
-  background-size:24px 24px}
+body{margin:0;font-family:var(--font);background:var(--bg);color:var(--text)}
 a{color:var(--green-b);text-decoration:none}
 /* Stop phone browsers from enlarging text until it overflows sideways */
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 
 header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:20px 28px;
   border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;
-  background:linear-gradient(180deg,rgba(10,14,13,.97),rgba(10,14,13,.82));
+  background:rgba(31,29,27,.94);
   backdrop-filter:blur(8px)}
-.logo{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-size:19px;
-  background:radial-gradient(circle at 35% 30%,#183123,#0c1a12);
-  border:1px solid #274a35;box-shadow:0 0 22px var(--glow)}
+.logo{width:34px;height:34px;display:block}
 .brand{display:flex;flex-direction:column;line-height:1.15}
-.brand b{font-size:16px;font-weight:700;color:var(--green-b);letter-spacing:.2px}
-.brand small{font-size:11.5px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase}
+.brand b{font-family:var(--serif);font-size:21px;font-weight:700;color:var(--text);letter-spacing:.2px}
+.brand small{font-size:12.5px;color:var(--muted)}
 .livewrap{display:flex;align-items:center;gap:9px;margin-left:6px;padding:6px 13px;border-radius:20px;
   background:var(--panel);border:1px solid var(--line);font-size:13px;font-weight:600}
-.tvlink{padding:6px 13px;border-radius:20px;background:var(--panel);border:1px solid var(--line);font-size:13px;
-  font-weight:600;color:var(--text);text-decoration:none}
-.tvlink:hover{border-color:var(--green-b)}
+.tvlink{padding:6px 2px;font-size:14px;color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent}
+.tvlink:hover{color:var(--text);border-bottom-color:var(--accent)}
 .dot{width:9px;height:9px;border-radius:50%}
-.on{background:var(--green);box-shadow:0 0 0 4px rgba(76,178,106,.18),0 0 12px var(--green);animation:pulse 2s infinite}
-.off{background:var(--red);box-shadow:0 0 0 4px rgba(240,100,91,.18)}
+.on{background:var(--green-b);box-shadow:0 0 0 4px rgba(129,182,76,.18);animation:pulse 2s infinite}
+.off{background:var(--red);box-shadow:0 0 0 4px rgba(217,96,90,.18)}
 @keyframes pulse{50%{opacity:.45}}
 .meta{margin-left:auto;min-width:0;text-align:right;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
 .meta b{color:var(--text);font-weight:600}
@@ -622,42 +618,40 @@ header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:20px
 main{padding:24px 28px 0}
 #stats{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
   max-width:1280px;margin:0 auto}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px;
-  position:relative;transition:border-color .2s,transform .2s}
-.card:hover{border-color:#2c4536;transform:translateY(-2px)}
-.card h2{font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px 18px 16px;position:relative}
+.card h2{font-family:var(--serif);font-size:18px;font-weight:700;color:var(--text);
   margin:0 0 14px;display:flex;align-items:center;gap:8px}
 .q{margin-left:auto;width:19px;height:19px;border-radius:50%;border:1px solid var(--line);
   color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;display:grid;place-items:center;
   transition:.15s;background:transparent;font-family:var(--font)}
-.q:hover{color:var(--green-b);border-color:var(--green);box-shadow:0 0 10px var(--glow)}
+.q:hover{color:var(--text);border-color:var(--ink-3)}
 .exp{max-height:0;overflow:hidden;transition:max-height .3s ease;
   font-size:12.5px;line-height:1.6;color:var(--muted)}
 .exp.open{max-height:420px;margin:2px 0 14px;padding:12px 13px;background:var(--panel2);
   border:1px solid var(--line);border-radius:9px}
 .exp b{color:var(--text)}
 
-.big{font-size:28px;font-weight:700;color:var(--text);letter-spacing:-.5px}
+.big{font-family:var(--serif);font-size:30px;font-weight:700;color:var(--text);font-variant-numeric:lining-nums tabular-nums}
 .big.g{color:var(--green-b)}
 .sub{font-size:12.5px;color:var(--muted);margin-top:3px}
 .kv{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13.5px}
 .kv:last-child{border:0}
 .kv span:first-child{color:var(--muted)}
-.kv .term{border-bottom:1px dotted #3a4c42;cursor:help}
+.kv .term{border-bottom:1px dotted var(--ink-3);cursor:help}
 .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:20px;font-size:12px;
   background:var(--panel2);border:1px solid var(--line);margin:3px 3px 0 0}
 .pill i{width:7px;height:7px;border-radius:50%;font-style:normal}
 .bar{height:24px;display:flex;border-radius:7px;overflow:hidden;margin-top:12px;border:1px solid var(--line)}
-.bar>div{display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#06120b;font-weight:700;min-width:0}
-.w{background:var(--green)}.d{background:#5c6b63}.l{background:var(--red)}
+.bar>div{display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#1f1d1b;font-weight:700;min-width:0}
+.w{background:var(--green)}.d{background:var(--neutral)}.l{background:var(--red)}
 .pbar{height:15px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);overflow:hidden;margin:12px 0 6px}
 .pbar>i{display:block;height:100%;width:0;border-radius:8px;
-  background:linear-gradient(90deg,var(--green),var(--green-b));transition:width .6s ease}
+  background:var(--green-b);transition:width .6s ease}
 svg{width:100%;height:66px;display:block}
 .evt{font-size:12.5px;max-height:230px;overflow:auto}
 .evt div{display:flex;align-items:center;gap:10px;padding:4px 0;border-bottom:1px solid var(--line)}
 .evt .tm{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
-.tag{padding:1px 9px;border-radius:5px;font-size:11px;font-weight:600;background:var(--panel2);border:1px solid var(--line)}
+.tag{padding:1px 9px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--mono);background:var(--panel2);border:1px solid var(--line)}
 .beat{color:var(--blue)}.update_task{color:var(--amber)}
 .request_task,.new_task,.request_version{color:var(--green-b)}
 .upload_pgn{color:var(--violet)}.failed_task,.request_spsa{color:var(--red)}
@@ -666,15 +660,7 @@ svg{width:100%;height:66px;display:block}
 .tinytag{font-size:10px;letter-spacing:.06em;color:var(--amber);border:1px solid var(--line);
   border-radius:20px;padding:2px 9px;text-transform:none}
 .vwrap{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
-.board{width:min(384px,84vw);aspect-ratio:1;display:grid;
-  grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
-  border:1px solid var(--line);border-radius:10px;overflow:hidden;flex:none;
-  box-shadow:0 0 24px rgba(0,0,0,.35)}
-.board .sq{display:flex;align-items:center;justify-content:center;
-  font-size:clamp(20px,4.6vw,32px);line-height:1;user-select:none}
-.board .lt{background:#bcc6a9}.board .dk{background:#4d6c4b}
-.board .wp{color:#fbfdf6;text-shadow:0 1px 2px rgba(0,0,0,.6)}
-.board .bp{color:#141815;text-shadow:0 1px 1px rgba(255,255,255,.22)}
+.board{width:min(384px,84vw);flex:none;border-radius:4px;box-shadow:0 12px 30px rgba(0,0,0,.4)}
 .vside{flex:1;min-width:248px;display:flex;flex-direction:column;gap:13px}
 .vsel{display:flex;gap:8px}
 .vsel select{flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--line);
@@ -682,7 +668,8 @@ svg{width:100%;height:66px;display:block}
 .vsel button,.controls button{background:var(--panel2);color:var(--text);border:1px solid var(--line);
   border-radius:8px;padding:8px 11px;cursor:pointer;font-family:var(--font);font-size:12.5px}
 .vsel button:hover,.controls button:hover{border-color:var(--green);color:var(--green-b)}
-#playBtn{background:#16281c;border-color:#2c4a35;color:var(--green-b);font-weight:600}
+#playBtn{background:var(--accent);border-color:var(--accent);color:#1f1d1b;font-weight:700}
+#playBtn:hover{filter:brightness(1.08);color:#1f1d1b}
 .ginfo{font-size:13px;color:var(--muted);line-height:1.5}
 .ginfo b{color:var(--text)}
 .evalwrap{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px}
@@ -699,8 +686,8 @@ svg{width:100%;height:66px;display:block}
 .cleanup{margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
 .cleanup .hd{font-size:14px;font-weight:600;margin-bottom:8px}
 .cleanup .hd b{color:var(--green-b)}
-.cmd{background:#070b0a;border:1px solid var(--line);border-radius:8px;padding:11px 13px;
-  font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--green-b);
+.cmd{background:var(--page);border:1px solid var(--line);border-radius:8px;padding:11px 13px;
+  font-family:var(--mono);font-size:12px;color:var(--green-b);
   white-space:pre-wrap;word-break:break-all;position:relative;margin-top:8px}
 .cmd button{position:absolute;top:7px;right:7px;font-family:var(--font);cursor:pointer;
   background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:6px;
@@ -711,22 +698,22 @@ svg{width:100%;height:66px;display:block}
 .dellist div{display:flex;gap:10px;padding:3px 0;border-bottom:1px solid var(--line)}
 .dellist .kept{color:var(--green-b)}
 .dellist .sz{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
-code{color:var(--green-b);font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+code{color:var(--green-b);font-family:var(--mono);font-size:12.5px}
 .empty{color:var(--muted);font-size:13px}
-.trophy{max-width:1280px;margin:0 auto 16px;background:linear-gradient(135deg,#14201a 0%,var(--panel) 60%);border-color:#2a4a36}
+.trophy{max-width:1280px;margin:0 auto 16px}
 .trophy .head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
-.trophy .cup{font-size:34px;line-height:1;filter:drop-shadow(0 0 12px rgba(226,161,58,.45))}
+.trophy .cup{width:38px;height:38px;align-self:center}
 .trophy .big{font-size:30px}
 .trophy .tiles{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));margin-top:16px}
 .trophy .tile{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
-.trophy .tile b{display:block;font-size:20px;color:var(--text)}
-.trophy .tile .lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:6px}
+.trophy .tile b{display:block;font-family:var(--serif);font-size:22px;color:var(--text);font-variant-numeric:lining-nums tabular-nums}
+.trophy .tile .lbl{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
 .trophy .tile .lbl i{width:8px;height:8px;border-radius:50%;font-style:normal}
 .trophy .tile.click{cursor:pointer}
-.trophy .tile.click:hover{border-color:#2f4a3b}
-.trophy .tile.on{border-color:var(--green-b);background:#0f1d16}
+.trophy .tile.click:hover{border-color:var(--ink-3)}
+.trophy .tile.on{border-color:var(--green-b);background:rgba(129,182,76,.08)}
 .trophy .tile .caret{margin-left:auto;color:var(--muted);font-size:12px}
-.trophy .orow{background:rgba(125,143,133,.06);border-color:var(--line)}
+.trophy .orow{background:rgba(255,255,255,.03);border-color:var(--line)}
 .trophy .orow code{color:var(--text)}
 .trophy .elo{margin-top:18px;padding:14px 14px 6px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
 .trophy .ehead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
@@ -741,14 +728,14 @@ code{color:var(--green-b);font-family:ui-monospace,Consolas,monospace;font-size:
 .trophy .ev{fill:var(--text);font-size:13px;font-weight:700}
 .trophy .etitle-svg{fill:var(--text);font-size:12.5px;font-weight:600}
 .trophy .etip{display:none;position:absolute;top:8px;z-index:3;max-width:300px;padding:9px 11px;border-radius:9px;
-  background:#0d1310;border:1px solid #2a4a36;font-size:12.5px;line-height:1.45;pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,.45)}
+  background:var(--surface-2);border:1px solid var(--rule);font-size:12.5px;line-height:1.45;pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,.45)}
 .trophy .etip .tl{color:var(--muted);display:flex;align-items:center;gap:6px}
 .trophy .etip .tl i{width:8px;height:8px;border-radius:50%;flex:none}
 .trophy .merged{margin-top:14px;display:flex;flex-direction:column;gap:8px}
 .trophy .mrow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font-size:13.5px;padding:9px 12px;
-  border-radius:10px;background:rgba(95,224,138,.07);border:1px solid #24402f}
+  border-radius:10px;background:rgba(129,182,76,.07);border:1px solid rgba(129,182,76,.28)}
 .trophy .mrow code{color:var(--green-b)}
-.trophy .wrow{background:rgba(110,160,255,.07);border-color:#28385a}
+.trophy .wrow{background:rgba(57,135,229,.07);border-color:rgba(57,135,229,.3)}
 .trophy .wrow code{color:var(--blue)}
 .trophy .wrow .nopr{color:var(--amber);font-weight:600}
 /* Phones: tighter spacing, a header that scrolls away, and the top-right info moved to the next line */
@@ -759,27 +746,27 @@ code{color:var(--green-b);font-family:ui-monospace,Consolas,monospace;font-size:
   main{padding:16px 16px 0}
   #stats{grid-template-columns:1fr}
   .trophy .big{font-size:24px}
-  .trophy .cup{font-size:28px}
+  .trophy .cup{width:32px;height:32px}
   .trophy .tiles{grid-template-columns:1fr 1fr;gap:8px}
   .trophy .tile{padding:9px 10px}
   .trophy .tile b{font-size:17px}
   .vside{min-width:0}
 }
-::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#243428;border-radius:5px}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:var(--rule);border-radius:5px}
 </style></head><body>
 
 <header>
-  <div class="logo">🐟</div>
+  <img class="logo" src="/pieces/staunty/wR.svg" alt="">
   <div class="brand"><b>Stockfish</b><small>Worker Monitor</small></div>
   <div class="livewrap"><span id="dot" class="dot off"></span><span id="state">—</span></div>
-  <a class="tvlink" href="/tv" title="The across-the-room view: live board and scouting report">📺 TV</a>
-  <a class="tvlink" href="/net" title="Explore Stockfish's neural network, its history and the latest training experiments">🧠 Net</a>
+  <a class="tvlink" href="/tv" title="The across-the-room view: live board and scouting report">TV</a>
+  <a class="tvlink" href="/net" title="Explore Stockfish's neural network, its history and the latest training experiments">Net</a>
   <div class="meta" id="meta"></div>
 </header>
 
 <div class="helpbar" id="helpbar">
   <button onclick="document.getElementById('helpbar').classList.toggle('open')">
-    ❔ What am I looking at? &nbsp;<span style="color:var(--muted);font-weight:400">(click to explain)</span></button>
+    What am I looking at? &nbsp;<span style="color:var(--muted);font-weight:400">(click to explain)</span></button>
   <div class="body">
     This machine is a <b>Fishtest worker</b> — it volunteers your CPU cores to test proposed
     improvements to the <b>Stockfish</b> chess engine. The server hands your worker a <b>task</b>
@@ -795,7 +782,7 @@ code{color:var(--green-b);font-family:ui-monospace,Consolas,monospace;font-size:
   <section id="trophy" class="card trophy" style="display:none"></section>
   <div id="stats"></div>
   <section id="viewer" class="card wide">
-    <h2>Game Viewer <span class="tinytag">eye-candy, not a metric</span>
+    <h2>Game viewer <span class="tinytag">eye-candy, not a metric</span>
       <button class="q" data-k="board">?</button></h2>
     <div class="exp" id="exp-board">A replay of the actual games your worker played (engine vs engine).
       <b>This is delight, not a metric</b> — one game tells you nothing about whether the patch is good;
@@ -813,13 +800,13 @@ code{color:var(--green-b);font-family:ui-monospace,Consolas,monospace;font-size:
         <div class="evalwrap"><svg id="evalGraph" viewBox="0 0 300 80" preserveAspectRatio="none"></svg>
           <div class="evalnow" id="evalNow">&mdash;</div></div>
         <div class="controls">
-          <button data-g="-1" title="previous game">&#9198; game</button>
-          <button data-p="first" title="start">&#9198;</button>
-          <button data-p="prev" title="previous move">&#9194;</button>
-          <button id="playBtn" data-p="play">&#9654; play</button>
-          <button data-p="next" title="next move">&#9193;</button>
-          <button data-p="last" title="end">&#9197;</button>
-          <button data-g="1" title="next game">game &#9197;</button>
+          <button data-g="-1" title="previous game">&lsaquo; Game</button>
+          <button data-p="first" title="start">Start</button>
+          <button data-p="prev" title="previous move">&larr;</button>
+          <button id="playBtn" data-p="play">Play</button>
+          <button data-p="next" title="next move">&rarr;</button>
+          <button data-p="last" title="end">End</button>
+          <button data-g="1" title="next game">Game &rsaquo;</button>
         </div>
         <div class="plabel" id="plabel">&mdash;</div>
       </div>
@@ -827,6 +814,8 @@ code{color:var(--green-b);font-family:ui-monospace,Consolas,monospace;font-size:
   </section>
 </main>
 
+<script src="/shared/pieceset.js"></script>
+<script src="/shared/board.js"></script>
 <script type="module">
 import { Chess } from "/vendor/chess.js";
 
@@ -930,11 +919,11 @@ async function tick(){
           <div class="kv"><span>Est. time left</span><span>${pg.eta_s!=null?"~"+fmtDur(pg.eta_s):"—"}</span></div>
           <div class="kv"><span>Rate</span><span>${pg.rate_per_min!=null?pg.rate_per_min+" games/min":"—"}</span></div>
           <div class="kv"><span>Elapsed</span><span>${fmtDur(pg.elapsed_s)}</span></div></div>`;
-    el.push(card("progress","Batch Progress",bar+rows));
+    el.push(card("progress","Batch progress",bar+rows));
   }
 
   if(d.current){const c2=d.current;
-    el.push(card("task","Current Task",
+    el.push(card("task","Current task",
       `<div class="kv"><span>run</span><span><code>${esc(c2.run.slice(0,12))}…</code></span></div>
        <div class="kv"><span>task</span><span>#${c2.task}</span></div>
        <div class="kv"><span>${term("games (size)","size")}</span><span>${c2.size}</span></div>
@@ -943,11 +932,11 @@ async function tick(){
        <div class="kv"><span>type</span><span>${term(c2.kind.toUpperCase(),"sprt")} ${c2.budget.toLocaleString()}</span></div>
        <div class="kv"><span>assigned</span><span>${fmtAge(c2.age_s)}</span></div>`));
   }else{
-    el.push(card("task","Current Task",`<div class="empty">no task in the recent log window</div>`));
+    el.push(card("task","Current task",`<div class="empty">no task in the recent log window</div>`));
   }
 
   if(gs){const t=gs.games||1;
-    el.push(card("games","Game Results",
+    el.push(card("games","Game results",
       `<div class="big">${gs.games} <span style="font-size:15px;color:var(--muted)">games · ${gs.pct}%</span></div>
        <div class="bar">
          <div class="w" style="width:${100*gs.wins/t}%">${gs.wins}</div>
@@ -962,7 +951,7 @@ async function tick(){
   const ec=d.ep_counts||{},dotc={beat:'var(--blue)',update_task:'var(--amber)',request_task:'var(--green-b)',upload_pgn:'var(--violet)',failed_task:'var(--red)'};
   const pills=Object.keys(ec).sort((a,b)=>ec[b]-ec[a]).map(k=>
     `<span class="pill"><i style="background:${dotc[k]||'var(--muted)'}"></i>${k} · ${ec[k]}</span>`).join("");
-  el.push(card("api","API Activity",pills||`<div class="empty">no calls yet</div>`));
+  el.push(card("api","API activity",pills||`<div class="empty">no calls yet</div>`));
 
   el.push(card("lat","Latency",
     spark(d.latency,"w","var(--blue)","wall (round-trip)")+
@@ -971,13 +960,13 @@ async function tick(){
 
   const evs=(d.events||[]).slice().reverse().map(e=>
     `<div><span class="tag ${e.ep}">${e.ep}</span><span class="tm">${new Date(e.t).toLocaleTimeString()}</span></div>`).join("");
-  el.push(`<div class="card wide"><h2>Event Stream<button class="q" data-k="events">?</button></h2>
+  el.push(`<div class="card wide"><h2>Event stream<button class="q" data-k="events">?</button></h2>
     <div class="exp" id="exp-events">${EXP.events}</div><div class="evt">${evs||'<div class="empty">no events</div>'}</div></div>`);
 
   if(d.pgns&&d.pgns.length){
     const rows=d.pgns.map(p=>`<div class="kv"><span><code>${esc(p.name.replace("results-","").slice(0,28))}</code></span>
       <span>${(p.size/1024).toFixed(0)} KB · ${fmtAge((Date.now()/1000)-p.mtime)}</span></div>`).join("");
-    el.push(`<div class="card wide"><h2>PGN Output<button class="q" data-k="pgn">?</button></h2>
+    el.push(`<div class="card wide"><h2>PGN output<button class="q" data-k="pgn">?</button></h2>
       <div class="exp" id="exp-pgn">${EXP.pgn}</div>${rows}</div>`);
   }
 
@@ -990,14 +979,14 @@ async function tick(){
       `Get-ChildItem -File | ? { $_.Name -notin $keep -and ($_.Name -like 'nn-*.nnue' -or `+
       `$_.Name -like 'stockfish-*.exe' -or $_.Name -like 'results-*.pgn') } | Remove-Item -Confirm:$false`;
     const dl=t.deletable.map(f=>`<div><span>${esc(f.name.slice(0,54))}</span><span class="sz">${mb(f.size)}</span></div>`).join("");
-    el.push(`<div class="card wide"><h2>Testing Folder — ${mb(t.total)}<button class="q" data-k="disk">?</button></h2>
+    el.push(`<div class="card wide"><h2>Testing folder — ${mb(t.total)}<button class="q" data-k="disk">?</button></h2>
       <div class="exp" id="exp-disk">${EXP.disk}</div>
       <div class="disk">${donut(t.categories,t.total)}<div class="legend">${legend}</div></div>
       <div class="cleanup">
-        <div class="hd">🧹 <b>${mb(t.reclaim)}</b> reclaimable · ${t.delcount} leftover files · ${t.filecount} total
+        <div class="hd"><b>${mb(t.reclaim)}</b> reclaimable · ${t.delcount} leftover files · ${t.filecount} total
           <span style="color:var(--muted);font-weight:400">(worker re-downloads on demand)</span></div>
         <div class="cmd" data-c="${escAttr(cmd)}"><button onclick="navigator.clipboard&&navigator.clipboard.writeText(this.parentNode.dataset.c);this.textContent='copied'">copy</button>${esc(cmd)}</div>
-        <div class="warn">⚠ Run only while the worker is <b>idle</b> — a running task holds its files open. Deletes nets, old engine builds & uploaded PGNs; keeps the ${t.keepnames.length} in-use files.</div>
+        <div class="warn">Run only while the worker is <b>idle</b> — a running task holds its files open. Deletes nets, old engine builds & uploaded PGNs; keeps the ${t.keepnames.length} in-use files.</div>
         <details style="margin-top:10px"><summary style="cursor:pointer;color:var(--green-b);font-size:13px">Show ${t.delcount} deletable files</summary>
           <div class="dellist">${dl}</div></details>
       </div></div>`);
@@ -1022,7 +1011,7 @@ const num=n=>Number(n||0).toLocaleString("en-US");
 async function loadTrophy(){
   // While the first count runs, say so (an empty card looks like it disappeared)
   const el0=document.getElementById("trophy");
-  if(el0.style.display==="none"){el0.innerHTML=`<h2>Your contribution</h2><div class="sub">🏆 Counting your contribution… (takes up to half a minute right after the monitor starts)</div>`;el0.style.display="block"}
+  if(el0.style.display==="none"){el0.innerHTML=`<h2>Your contribution</h2><div class="sub">Counting your contribution… (takes up to half a minute right after the monitor starts)</div>`;el0.style.display="block"}
   // If it fails (e.g. the monitor is restarting), retry in 15 seconds rather than waiting 10 minutes
   let d;try{d=await (await fetch("/impact")).json()}catch{setTimeout(loadTrophy,15000);return}
   const T=d.totals||{},all=Object.values(T);
@@ -1068,7 +1057,7 @@ async function loadTrophy(){
     const c=p.commit,link=c.sha?`https://github.com/official-stockfish/Stockfish/commit/${c.sha}`:null;
     const e=pe[c.sha],eloTxt=e?` · <b>${fmtE(e.elo)}</b> nElo (${fmtE(e.lo)} to ${fmtE(e.hi)})`:"";
     const kinds=p.tests.map(t=>tcName(t.tc)).join(" + ");
-    return `<div class="mrow">🏆 <code>${esc(p.branch)}</code>
+    return `<div class="mrow"><code>${esc(p.branch)}</code>
       ${link?`<a href="${escAttr(link)}" target="_blank" rel="noopener">“${esc(c.subject||"commit")}”</a>`:""}
       <span class="sub">${esc(c.date||"")}${c.sha?" · "+esc(c.sha.slice(0,7)):""} · by ${esc(p.author||"?")} · you played ${esc(kinds)}: ${num(p.games)} games, ${num(Math.round(p.hours))} CPU-h${eloTxt}</span></div>`;
   }).join("");
@@ -1087,7 +1076,7 @@ async function loadTrophy(){
   const el=document.getElementById("trophy"),wasOpen=document.getElementById("exp-trophy")?.classList.contains("open");
   el.innerHTML=`<h2>Your contribution${since?` · since ${esc(since)}`:""}<button class="q" data-k="trophy">?</button></h2>
     <div class="exp${wasOpen?" open":""}" id="exp-trophy">${EXP.trophy}</div>
-    <div class="head"><span class="cup">🏆</span>${headline}</div>
+    <div class="head"><img class="cup" src="/pieces/staunty/wQ.svg" alt="">${headline}</div>
     <div class="tiles">${tiles}</div>
     ${trophyOpen&&lists[trophyOpen]?`<div class="merged">${lists[trophyOpen]}</div>`:""}
     ${(d.patch_elo||[]).length?`<div class="elo" id="eloChart"></div>`:""}
@@ -1111,7 +1100,7 @@ loadTrophy();setInterval(loadTrophy,10*60*1000);
 /* ---- Elo chart: what the merged patches you helped test added, per patch and as a running total ----
    Each patch is measured by Fishtest's median-unbiased estimate from its LTC test (normalized Elo,
    95% interval). The running total's interval adds the patches' uncertainties in quadrature. */
-const ELO_COLOR={gainer:"#34a85e",nonreg:"#5288d0"};  // validated pair on the card surface (dark)
+const ELO_COLOR={gainer:"#6c9e3c",nonreg:"#3987e5"};  // theme --series-1 / --series-2, validated on the card surface
 const ELO_KIND={gainer:"Had to prove it's stronger",nonreg:"Had to prove it's not weaker"};
 let ELO=[];
 function niceTicks(lo,hi,n){
@@ -1133,7 +1122,7 @@ function drawElo(){
   const e0=Math.min(0,...ELO.map(p=>p.lo)),e1=Math.max(0,...ELO.map(p=>p.hi));
   const t2=niceTicks(e0,e1,4),y2lo=Math.min(e0,t2[0]),y2hi=Math.max(e1,t2[t2.length-1]),top2=pad.t+H1+GAP;
   const y2=v=>top2+H2-(v-y2lo)/(y2hi-y2lo)*H2;
-  const grid=(ticks,y,x0,x1)=>ticks.map(t=>`<line x1="${x0}" x2="${x1}" y1="${y(t)}" y2="${y(t)}" stroke="${t===0?"#3a4a41":"#1d2a23"}" stroke-width="1"/>
+  const grid=(ticks,y,x0,x1)=>ticks.map(t=>`<line x1="${x0}" x2="${x1}" y1="${y(t)}" y2="${y(t)}" stroke="${t===0?"#55504a":"#3a3734"}" stroke-width="1"/>
       <text x="${x0-8}" y="${y(t)+4}" text-anchor="end" class="tk">${fmtE(t)}</text>`).join("");
   const band=`M${run.map((r,i)=>`${x(i)},${y1(r.hi)}`).join(" L")} L${run.map((r,i)=>`${x(i)},${y1(r.lo)}`).reverse().join(" L")} Z`;
   const line=run.map((r,i)=>`${i?"L":"M"}${x(i)},${y1(r.c)}`).join(" ");
@@ -1153,9 +1142,9 @@ function drawElo(){
       <span class="ekey"><i style="background:transparent;border-color:${ELO_COLOR.nonreg}"></i>${ELO_KIND.nonreg}</span></div>
     <div class="ewrap"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Running total of Elo added, and each patch's Elo with its 95% range">
       ${grid(t1,y1,pad.l,W-pad.r)}
-      <path d="${band}" fill="#34a85e" opacity=".12"/>
-      <path d="${line}" fill="none" stroke="#34a85e" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      <circle cx="${x(n-1)}" cy="${y1(last.c)}" r="5" fill="#34a85e" stroke="var(--panel)" stroke-width="2"/>
+      <path d="${band}" fill="#6c9e3c" opacity=".12"/>
+      <path d="${line}" fill="none" stroke="#6c9e3c" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${x(n-1)}" cy="${y1(last.c)}" r="5" fill="#6c9e3c" stroke="var(--panel)" stroke-width="2"/>
       <text x="${x(n-1)+10}" y="${y1(last.c)+4}" class="ev">${fmtE(last.c)}</text>
       <text x="${pad.l}" y="${top2-14}" class="etitle-svg">Each patch, with its 95% range</text>
       ${grid(t2,y2,pad.l,W-pad.r)}
@@ -1180,9 +1169,9 @@ function drawElo(){
 let eloResize;addEventListener("resize",()=>{clearTimeout(eloResize);eloResize=setTimeout(drawElo,150)});
 
 /* ---- Game Viewer: built once, holds its own state, never reset by polling ---- */
-const V={games:[],gi:0,ply:0,timer:null};
+const V={games:[],gi:0,ply:0,timer:null,shown:null};
 const $=id=>document.getElementById(id);
-const GLYPH={p:"♟",n:"♞",b:"♝",r:"♜",q:"♛",k:"♚"};
+let board=null;  // the shared Board (engine-tv/shared/board.js), made on first draw
 
 function boardAt(g,ply){
   const c=new Chess(g.fen);
@@ -1190,13 +1179,12 @@ function boardAt(g,ply){
   return c;
 }
 function renderBoard(c){
-  const b=c.board();let h="";
-  for(let r=0;r<8;r++)for(let f=0;f<8;f++){
-    const p=b[r][f];const dark=(r+f)%2===1;
-    const g=p?`<span class="${p.color==='w'?'wp':'bp'}">${GLYPH[p.type]}</span>`:"";
-    h+=`<div class="sq ${dark?'dk':'lt'}">${g}</div>`;
-  }
-  $("board").innerHTML=h;
+  if(!board)board=new ChessUI.Board($("board"),{pieceSet:{name:"staunty",ext:"svg"},animMs:240});
+  const last=c.history({verbose:true}).pop();
+  // slide the piece only for a single step forward in the same game; jumps redraw in place
+  const prev=V.shown,animate=!!(prev&&prev.gi===V.gi&&prev.ply===V.ply-1);
+  board.set(c.fen().split(" ")[0],{last:last?last.from+last.to:null,animate});
+  V.shown={gi:V.gi,ply:V.ply};
 }
 function renderEval(g,ply){
   const W=300,H=80,cap=6,ev=g.evals.map(e=>e==null?0:Math.max(-cap,Math.min(cap,e)));
@@ -1206,13 +1194,13 @@ function renderEval(g,ply){
   const cx=Math.min(ply,ev.length-1)*step;
   $("evalGraph").innerHTML=
     `<rect x="0" y="0" width="${W}" height="${H/2}" fill="rgba(255,255,255,.03)"/>`+
-    `<line x1="0" y1="${H/2}" x2="${W}" y2="${H/2}" stroke="#2b3a30"/>`+
+    `<line x1="0" y1="${H/2}" x2="${W}" y2="${H/2}" stroke="var(--rule)"/>`+
     `<path d="${line}" fill="none" stroke="var(--green-b)" stroke-width="1.6"/>`+
     `<line x1="${cx.toFixed(1)}" y1="0" x2="${cx.toFixed(1)}" y2="${H}" stroke="var(--amber)" stroke-width="1"/>`;
 }
 function renderGame(){
   const g=V.games[V.gi];
-  if(!g){$("board").innerHTML="";$("ginfo").textContent="no games in this file";$("plabel").textContent="—";return;}
+  if(!g){if(board)board.set("8/8/8/8/8/8/8/8",{animate:false});V.shown=null;$("ginfo").textContent="no games in this file";$("plabel").textContent="—";return;}
   V.ply=Math.max(0,Math.min(V.ply,g.plies));
   renderBoard(boardAt(g,V.ply));
   renderEval(g,V.ply);
@@ -1222,12 +1210,12 @@ function renderGame(){
     (g.termination?` · ${esc(g.termination)}`:"");
   $("plabel").textContent=`ply ${V.ply} / ${g.plies}  ·  game ${V.gi+1} / ${V.games.length}`;
 }
-function stopPlay(){if(V.timer){clearInterval(V.timer);V.timer=null;}const b=$("playBtn");if(b)b.innerHTML="&#9654; play";}
+function stopPlay(){if(V.timer){clearInterval(V.timer);V.timer=null;}const b=$("playBtn");if(b)b.textContent="Play";}
 function play(){
   if(V.timer){stopPlay();return;}
   const g=V.games[V.gi];if(!g)return;
   if(V.ply>=g.plies)V.ply=0;
-  $("playBtn").innerHTML="&#9208; pause";
+  $("playBtn").textContent="Pause";
   V.timer=setInterval(()=>{
     const gg=V.games[V.gi];
     if(!gg||V.ply>=gg.plies){stopPlay();return;}
@@ -2242,46 +2230,47 @@ def watchdog():
 
 REMOTE_PAGE =r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0a0e0d">
+<meta name="theme-color" content="#1f1d1b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Fishtest Remote</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="stylesheet" href="/shared/theme.css">
 <style>
-:root{color-scheme:dark;--bg:#0a0e0d;--panel:#101613;--line:#1d2a23;--text:#e7efe9;--muted:#7d8f85;
-  --green:#4cb26a;--green-b:#5fe08a;--red:#f0645b;--amber:#e2a13a;
-  --font:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif}
+/* the shared look (/shared/theme.css), under this page's older token names */
+:root{--bg:var(--page);--panel:var(--surface);--line:var(--rule);--text:var(--ink);--muted:var(--ink-3);
+  --green:var(--good);--green-b:var(--accent);--red:var(--bad);--amber:var(--warn);--font:var(--sans)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;font-family:var(--font);background:var(--bg);color:var(--text);
   padding:max(16px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom))}
 main{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
 header{display:flex;align-items:center;gap:10px;margin:4px 0 6px}
 header img{width:30px;height:30px}
-header h1{font-size:20px;margin:0;font-weight:700;flex:1}
+header h1{font-family:var(--serif);font-size:22px;margin:0;font-weight:700;flex:1}
 .ago{font-size:12px;color:var(--muted)}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px}
 .row{display:flex;align-items:center;gap:10px}
-.label{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);flex:1}
-.dot{width:10px;height:10px;border-radius:50%;background:#3a4741}
-.dot.on{background:var(--green-b);box-shadow:0 0 10px var(--green)}
-.dot.wait{background:var(--amber);box-shadow:0 0 10px var(--amber)}
-.state{font-size:22px;font-weight:700;margin:10px 0 2px}
+.label{font-size:14px;color:var(--muted);flex:1}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--neutral)}
+.dot.on{background:var(--green-b);box-shadow:0 0 0 4px rgba(129,182,76,.18)}
+.dot.wait{background:var(--amber);box-shadow:0 0 0 4px rgba(217,164,65,.18)}
+.state{font-family:var(--serif);font-size:24px;font-weight:700;margin:10px 0 2px}
 .sub{font-size:14px;color:var(--muted);line-height:1.45;overflow-wrap:anywhere}
-.bar{height:8px;border-radius:4px;background:#18221d;margin:12px 0 6px;overflow:hidden}
+.bar{height:8px;border-radius:4px;background:var(--surface-2);margin:12px 0 6px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--green);border-radius:4px;transition:width .4s}
 .stats{display:flex;gap:16px;font-size:14px;color:var(--muted);flex-wrap:wrap}
 .stats b{color:var(--text);font-variant-numeric:tabular-nums}
 button{width:100%;margin-top:14px;padding:16px;border:0;border-radius:14px;font:inherit;font-size:17px;
-  font-weight:700;color:#06110a;background:var(--green-b);cursor:pointer}
-button.stop{background:var(--red);color:#1a0605}
-button.ghost{background:#1a2520;color:var(--text)}
+  font-weight:700;color:#1f1d1b;background:var(--green-b);cursor:pointer}
+button.stop{background:var(--red);color:#1f1d1b}
+button.ghost{background:var(--surface-2);color:var(--text);border:1px solid var(--line)}
 button:disabled{opacity:.45}
 a.more{display:block;text-align:center;color:var(--green-b);text-decoration:none;font-size:15px;padding:8px}
 #login{display:none}
 #login input{width:100%;margin-top:12px;padding:16px;border-radius:14px;border:1px solid var(--line);
-  background:#0d1310;color:var(--text);font-size:28px;letter-spacing:.4em;text-align:center}
+  background:var(--surface-2);color:var(--text);font-size:28px;letter-spacing:.4em;text-align:center}
 .err{color:var(--red);font-size:14px;min-height:20px;margin-top:8px}
 </style></head><body><main>
 <header><img src="/favicon.svg" alt=""><h1>Fishtest Remote</h1><span class="ago" id="ago"></span></header>
@@ -2430,8 +2419,8 @@ MANIFEST = json.dumps({
     "start_url": "/remote",
     "scope": "/",
     "display": "standalone",
-    "background_color": "#0a0e0d",
-    "theme_color": "#0a0e0d",
+    "background_color": "#1f1d1b",
+    "theme_color": "#1f1d1b",
     "icons": [
         {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
         {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png"},
@@ -2440,11 +2429,11 @@ MANIFEST = json.dumps({
 })
 # Nothing is cached (status is always fetched fresh); only when the PC can't be reached, show a message instead of a blank page
 SERVICE_WORKER = r"""const OFFLINE = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Fishtest Remote</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0e0d;color:#e7efe9;
-font-family:system-ui,sans-serif;text-align:center;padding:24px"><div><div style="font-size:48px">🐟</div>
-<h1 style="font-size:20px">Can't reach your PC</h1><p style="color:#7d8f85;line-height:1.5">Is the PC on and the monitor running?<br>
+<title>Fishtest Remote</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#1f1d1b;color:#f3f1ec;
+font-family:system-ui,sans-serif;text-align:center;padding:24px"><div>
+<h1 style="font-size:20px">Can't reach your PC</h1><p style="color:#8c867c;line-height:1.5">Is the PC on and the monitor running?<br>
 Away from home, check that Tailscale is connected.</p><button onclick="location.reload()" style="margin-top:12px;padding:14px 28px;
-border:0;border-radius:12px;background:#5fe08a;font-size:16px;font-weight:700">Try again</button></div>`
+border:0;border-radius:12px;background:#81b64c;font-size:16px;font-weight:700">Try again</button></div>`
 self.addEventListener("install", () => self.skipWaiting())
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()))
 self.addEventListener("fetch", e => {
@@ -2586,7 +2575,8 @@ class Handler(BaseHTTPRequestHandler):
             # the shared board component and pieces (engine-tv/shared), read from disk like the TV
             m = SHARED_SCRIPT.fullmatch(route)
             if m:
-                path, ctype = os.path.join(SHARED, f"{m.group(1)}.js"), "text/javascript; charset=utf-8"
+                path = os.path.join(SHARED, m.group(1))
+                ctype = "text/css; charset=utf-8" if m.group(1).endswith(".css") else "text/javascript; charset=utf-8"
             else:
                 m = SHARED_PIECE.fullmatch(route)
                 path = os.path.join(SHARED, "pieces", m.group(1), f"{m.group(2)}.{m.group(3)}")
