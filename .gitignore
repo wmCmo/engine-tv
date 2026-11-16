@@ -1,4 +1,4 @@
-# 実行時のデータ（貢献の台帳・リモコンの PIN・スカウティングレポート・Stockfish の履歴）。公開しない
+# Runtime data (contribution ledger, remote PIN, scouting reports, Stockfish history). Never published.
 tv-cache/
 
 __pycache__/
