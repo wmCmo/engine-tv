@@ -31,5 +31,5 @@ Python 3.10+ (standard library) runs both servers. Leela's Net explorer also nee
 ## License
 
 The code is MIT ([LICENSE](LICENSE)). Bundled assets keep their own licenses: chess pieces from
-[lichess-org/lila](https://github.com/lichess-org/lila) (each set's license is listed in `leela/pieces/sets.json`;
+[lichess-org/lila](https://github.com/lichess-org/lila) (in `shared/pieces/`, which both apps use; each set's license is listed in `shared/pieces/sets.json`;
 the Stockfish TV uses Staunty, CC BY-NC-SA 4.0) and [chess.js](https://github.com/jhlywa/chess.js) (BSD 2-Clause).

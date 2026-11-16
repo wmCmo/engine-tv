@@ -164,8 +164,8 @@ Keys: ←/→ step, Home/End, F flips the board.
   (default `terminal`; also `neural-ring`, `ring`, `board`). Restart the server after changing it.
 - `pieces.html` + `pieceset.js`: the piece gallery and the shared piece-set choice (stored in the
   browser's localStorage, so every page and open tab follows it).
-- `pieces/<set>/`: 37 piece sets from lichess-org/lila, with authors and licences in
-  `pieces/sets.json`. `python fetch_pieces.py` re-downloads them. Sets that lila lists without a
+- `../shared/pieces/<set>/`: 37 piece sets from lichess-org/lila, shared with the fishtest app, with
+  authors and licences in `shared/pieces/sets.json`. `python shared/fetch_pieces.py` re-downloads them. Sets that lila lists without a
   licence aren't included. Many sets are CC BY-NC-SA (non-commercial), which covers personal use like
   this; check the licence before reusing them elsewhere.
 

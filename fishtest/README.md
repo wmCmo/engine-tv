@@ -132,4 +132,4 @@ MIT ([LICENSE](LICENSE)). `vendor/chess.js` is [chess.js](https://github.com/jhl
 the top of the file). The TV's chess pieces are [Staunty](https://github.com/lichess-org/lila/tree/master/public/piece/staunty)
 by sadsnake1, via [lichess-org/lila](https://github.com/lichess-org/lila), licensed
 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). The pieces keep their own licence, separate from
-the MIT licence of the code: it covers `art/staunty/` and the copy that `tools/build_pieces.py` embeds in `tv.html`.
+the MIT licence of the code: it covers `shared/pieces/staunty/` (the piece library both engine-tv apps share) and the copy that `tools/build_pieces.py` embeds in `tv.html`.

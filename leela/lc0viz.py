@@ -24,6 +24,8 @@ from netapi import NetHelper
 from stats import game_stats, aggregate
 
 ROOT = Path(__file__).resolve().parent
+SHARED = ROOT.parent / "shared"   # engine-tv/shared: the piece library both apps use
+PIECES = SHARED / "pieces"
 CACHE = ROOT / "cache"
 FAVICON = "terminal"  # any file in favicons/: terminal, neural-ring, ring, board
 NOWIN = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -419,7 +421,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send((ROOT / SCRIPTS[path]).read_bytes(), "text/javascript; charset=utf-8")
         m = re.fullmatch(r"/pieces/([a-z0-9-]+)/([wb][KQRBNP])\.(svg|webp)", path)
         if m:
-            f = ROOT / "pieces" / m.group(1) / f"{m.group(2)}.{m.group(3)}"
+            f = PIECES / m.group(1) / f"{m.group(2)}.{m.group(3)}"
             if f.is_file():
                 return self._send(f.read_bytes(), "image/svg+xml" if m.group(3) == "svg" else "image/webp")
         if path == "/manifest.webmanifest":
@@ -432,7 +434,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/favicon.svg", "/favicon.ico"):  # .ico: browsers ask for it by default
             return self._send((ROOT / "favicons" / f"{FAVICON}.svg").read_bytes(), "image/svg+xml")
         if path == "/api/piecesets":
-            return self._send((ROOT / "pieces" / "sets.json").read_bytes(), "application/json")
+            return self._send((PIECES / "sets.json").read_bytes(), "application/json")
         if path == "/api/games":
             games = STORE.all()
             return self._json({"games": [s for s, _ in games[:300]], "stats": topbar_stats(games, self.collector)})
