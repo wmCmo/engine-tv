@@ -18,6 +18,7 @@ import json
 import secrets
 import struct
 import subprocess
+import sys
 import math
 import os
 import re
@@ -115,8 +116,10 @@ def read_cfg():
 VENDOR = os.path.join(HERE, "vendor")
 # engine-tv/shared: the board component and piece library this app shares with leela/
 SHARED = os.path.join(os.path.dirname(HERE), "shared")
-SHARED_SCRIPT = re.compile(r"/shared/(board\.js|pieceset\.js|canvas\.js|theme\.css)")
-SHARED_PIECE = re.compile(r"/pieces/([a-z0-9-]+)/([wb][KQRBNP])\.(svg|webp)")
+sys.path.insert(0, SHARED)
+from sharedfiles import shared_file  # noqa: E402  (engine-tv/shared/sharedfiles.py)
+# the phone app's name and start command, for the shared service worker's "PC not reachable" page
+PWA_APP = {"name": "Fishtest Remote", "start": "fishtest worker"}
 RESULT_TOKENS = {"1-0", "0-1", "1/2-1/2", "*"}
 PGN_NAME = re.compile(r"^results-[0-9a-f]+-\d+\.pgn$")
 
@@ -2405,9 +2408,8 @@ setInterval(() => {
 setInterval(() => { if (!document.hidden && !busy && $("login").style.display !== "block") refresh() }, 4000)
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh() })
 refresh()
-// Make it installable as a home-screen app (registration only works over HTTPS or on localhost)
-if ("serviceWorker" in navigator && window.isSecureContext) navigator.serviceWorker.register("/sw.js").catch(() => {})
-</script></body></html>"""
+</script>
+<script src="/shared/pwa.js"></script></body></html>"""
 
 # ---- Home-screen app (PWA): manifest and service worker ----
 STATIC = os.path.join(HERE, "static")
@@ -2427,20 +2429,6 @@ MANIFEST = json.dumps({
         {"src": "/static/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
     ],
 })
-# Nothing is cached (status is always fetched fresh); only when the PC can't be reached, show a message instead of a blank page
-SERVICE_WORKER = r"""const OFFLINE = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Fishtest Remote</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#1f1d1b;color:#f3f1ec;
-font-family:system-ui,sans-serif;text-align:center;padding:24px"><div>
-<h1 style="font-size:20px">Can't reach your PC</h1><p style="color:#8c867c;line-height:1.5">Is the PC on and the monitor running?<br>
-Away from home, check that Tailscale is connected.</p><button onclick="location.reload()" style="margin-top:12px;padding:14px 28px;
-border:0;border-radius:12px;background:#81b64c;font-size:16px;font-weight:700">Try again</button></div>`
-self.addEventListener("install", () => self.skipWaiting())
-self.addEventListener("activate", e => e.waitUntil(self.clients.claim()))
-self.addEventListener("fetch", e => {
-  if (e.request.mode !== "navigate") return
-  e.respondWith(fetch(e.request).catch(() => new Response(OFFLINE, {headers: {"Content-Type": "text/html; charset=utf-8"}})))
-})
-"""
 STATIC_FILE = re.compile(r"/static/([a-z0-9-]+\.png)")
 
 
@@ -2494,8 +2482,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(403)
             return
         static = STATIC_FILE.fullmatch(route)
-        public = (route in FAVICONS or static is not None
-                  or route in ("/favicon.ico", "/remote", "/manifest.webmanifest", "/sw.js"))
+        shared = shared_file(route, PWA_APP)  # engine-tv/shared assets and the service worker: public, like the icons
+        public = (shared is not None or route in FAVICONS or static is not None
+                  or route in ("/favicon.ico", "/remote", "/manifest.webmanifest"))
         if not public and not self._remote_ok():
             if route == "/":
                 self.send_response(302)
@@ -2510,8 +2499,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(remote_status())
         elif route == "/manifest.webmanifest":
             self._send(MANIFEST, "application/manifest+json")
-        elif route == "/sw.js":
-            self._send(SERVICE_WORKER, "text/javascript; charset=utf-8")
+        elif shared is not None:
+            self._send(*shared)
         elif static is not None:
             try:
                 with open(os.path.join(STATIC, static.group(1)), "rb") as f:
@@ -2571,21 +2560,6 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(f.read(), "text/javascript; charset=utf-8")
             except OSError:
                 self.send_error(404, "chess.js not vendored")
-        elif SHARED_SCRIPT.fullmatch(route) or SHARED_PIECE.fullmatch(route):
-            # the shared board component and pieces (engine-tv/shared), read from disk like the TV
-            m = SHARED_SCRIPT.fullmatch(route)
-            if m:
-                path = os.path.join(SHARED, m.group(1))
-                ctype = "text/css; charset=utf-8" if m.group(1).endswith(".css") else "text/javascript; charset=utf-8"
-            else:
-                m = SHARED_PIECE.fullmatch(route)
-                path = os.path.join(SHARED, "pieces", m.group(1), f"{m.group(2)}.{m.group(3)}")
-                ctype = "image/svg+xml" if m.group(3) == "svg" else "image/webp"
-            try:
-                with open(path, "rb") as f:
-                    self._send(f.read(), ctype)
-            except OSError:
-                self.send_error(404)
         else:
             self._send(PAGE, "text/html; charset=utf-8")
 

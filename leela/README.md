@@ -53,7 +53,7 @@ Never use `tailscale serve reset`: it removes the other apps' serves too.
 
 **Install it as an app**: open that address in Samsung Internet or Chrome and tap *Install app* in
 the top bar (or the browser menu's *Add page to → Home screen*). It opens full screen on the
-Dashboard, with long-press shortcuts to Live boards, Analysis and Net. The service worker (`sw.js`)
+Dashboard, with long-press shortcuts to Live boards, Analysis and Net. The service worker (`../shared/sw.js`, shared with the Fishtest phone app)
 caches nothing, so the numbers are always live; when the PC is unreachable it shows a short "Your
 PC isn't reachable" page instead of a browser error. Icons are made by `make_icons.py` from the
 terminal favicon design.

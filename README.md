@@ -16,6 +16,10 @@ Tailscale as an installable app.
 The two apps run separately (own process, own port), so you can use either one on its own. Each folder's README has
 the details, requirements and settings.
 
+What they share lives in [`shared/`](shared/): the colours and typefaces (`theme.css`), the chess board (`board.js`,
+`pieceset.js`) and piece library (`pieces/`), the pan/zoom canvas of both Net explorers (`canvas.js`), the phone-app
+service worker and install button (`sw.js`, `pwa.js`), and `sharedfiles.py`, which both servers use to serve all of it.
+
 ## Setup
 
 Add both commands to your PowerShell profile (Windows PowerShell 5.1 and PowerShell 7 read different profile files):

@@ -10,6 +10,7 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -26,6 +27,10 @@ from stats import game_stats, aggregate
 ROOT = Path(__file__).resolve().parent
 SHARED = ROOT.parent / "shared"   # engine-tv/shared: the piece library both apps use
 PIECES = SHARED / "pieces"
+sys.path.append(str(SHARED))
+from sharedfiles import shared_file  # noqa: E402  (engine-tv/shared/sharedfiles.py)
+# the phone app's name and start command, for the shared service worker's "PC not reachable" page
+PWA_APP = {"name": "Lc0 Live", "start": "leela dashboard"}
 CACHE = ROOT / "cache"
 FAVICON = "terminal"  # any file in favicons/: terminal, neural-ring, ring, board
 NOWIN = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -36,9 +41,8 @@ PAGES = {"/": "index.html", "/index.html": "index.html", "/live": "live.html", "
          "/net": "net.html", "/net.html": "net.html",
          "/mock": "stats.html"}  # the design mockup became the dashboard; keep the old link working
 # URL -> file; board.js and pieceset.js live in engine-tv/shared (the fishtest TV uses them too)
-SCRIPTS = {"/board.js": SHARED / "board.js", "/pieceset.js": SHARED / "pieceset.js", "/pwa.js": ROOT / "pwa.js",
-           "/shared/board.js": SHARED / "board.js", "/shared/pieceset.js": SHARED / "pieceset.js",
-           "/shared/canvas.js": SHARED / "canvas.js"}
+# the pages' older script paths; everything under /shared/ (and /pieces/, /sw.js) goes through shared_file()
+SCRIPTS = {"/board.js": SHARED / "board.js", "/pieceset.js": SHARED / "pieceset.js", "/pwa.js": SHARED / "pwa.js"}
 
 
 # ------------------------------------------------------------------ game store
@@ -422,17 +426,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send((ROOT / PAGES[path]).read_bytes(), "text/html; charset=utf-8")
         if path in SCRIPTS:
             return self._send(SCRIPTS[path].read_bytes(), "text/javascript; charset=utf-8")
-        if path == "/shared/theme.css":
-            return self._send((SHARED / "theme.css").read_bytes(), "text/css; charset=utf-8")
-        m = re.fullmatch(r"/pieces/([a-z0-9-]+)/([wb][KQRBNP])\.(svg|webp)", path)
-        if m:
-            f = PIECES / m.group(1) / f"{m.group(2)}.{m.group(3)}"
-            if f.is_file():
-                return self._send(f.read_bytes(), "image/svg+xml" if m.group(3) == "svg" else "image/webp")
+        shared = shared_file(path, PWA_APP)
+        if shared:
+            return self._send(*shared)
         if path == "/manifest.webmanifest":
             return self._send((ROOT / "manifest.webmanifest").read_bytes(), "application/manifest+json")
-        if path == "/sw.js":  # served from the root so its scope covers every page
-            return self._send((ROOT / "sw.js").read_bytes(), "text/javascript; charset=utf-8")
         m = re.fullmatch(r"/icons/([a-z0-9-]+\.png)", path)
         if m and (ROOT / "icons" / m.group(1)).is_file():
             return self._send((ROOT / "icons" / m.group(1)).read_bytes(), "image/png")
