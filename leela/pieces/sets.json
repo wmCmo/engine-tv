@@ -1,0 +1,187 @@
+{
+ "cburnett": {
+  "author": "Colin M.L. Burnett",
+  "license": "GPLv2+",
+  "ext": "svg"
+ },
+ "merida": {
+  "author": "Armando Hernandez Marroquin",
+  "license": "GPLv2+",
+  "ext": "svg"
+ },
+ "chessnut": {
+  "author": "Alexis Luengas",
+  "license": "Apache 2.0",
+  "ext": "svg"
+ },
+ "letter": {
+  "author": "usolando",
+  "license": "AGPLv3+",
+  "ext": "svg"
+ },
+ "pirouetti": {
+  "author": "pirouetti",
+  "license": "AGPLv3+",
+  "ext": "svg"
+ },
+ "pixel": {
+  "author": "therealqtpi",
+  "license": "AGPLv3+",
+  "ext": "svg"
+ },
+ "shapes": {
+  "author": "flugsio",
+  "license": "CC BY-SA 4.0",
+  "ext": "svg"
+ },
+ "rhosgfx": {
+  "author": "RhosGFX",
+  "license": "CC0 1.0",
+  "ext": "svg"
+ },
+ "california": {
+  "author": "Jerry S.",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "caliente": {
+  "author": "avi",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "maestro": {
+  "author": "sadsnake1",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "fantasy": {
+  "author": "Maurizio Monge",
+  "license": "MIT",
+  "ext": "svg"
+ },
+ "spatial": {
+  "author": "Maurizio Monge",
+  "license": "MIT",
+  "ext": "svg"
+ },
+ "celtic": {
+  "author": "Maurizio Monge",
+  "license": "MIT",
+  "ext": "svg"
+ },
+ "fresca": {
+  "author": "sadsnake1",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "cardinal": {
+  "author": "sadsnake1",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "icpieces": {
+  "author": "sadsnake1",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "gioco": {
+  "author": "sadsnake1",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "tatiana": {
+  "author": "sadsnake1",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "staunty": {
+  "author": "sadsnake1",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "dubrovny": {
+  "author": "sadsnake1",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "anarcandy": {
+  "author": "caderek",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "kiwen-suwi": {
+  "author": "neverRare",
+  "license": "CC BY 4.0",
+  "ext": "svg"
+ },
+ "mpchess": {
+  "author": "Maxime Chupin",
+  "license": "GPLv3+",
+  "ext": "svg"
+ },
+ "cooke": {
+  "author": "fejfar",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "monarchy": {
+  "author": "slither77",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "webp"
+ },
+ "xkcd": {
+  "author": "Randall Munroe",
+  "license": "CC BY-NC-SA 2.5",
+  "ext": "svg"
+ },
+ "firi": {
+  "author": "James Faure",
+  "license": "CC BY 4.0",
+  "ext": "svg"
+ },
+ "minimal-warmth": {
+  "author": "blunder_reign",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "horsey": {
+  "author": "cham, michael1241",
+  "license": "CC BY-NC-SA 4.0",
+  "ext": "svg"
+ },
+ "totoy": {
+  "author": "Kosal Sen",
+  "license": "CC BY 4.0",
+  "ext": "svg"
+ },
+ "papercut": {
+  "author": "Nikolay Anzarov",
+  "license": "CC BY 4.0",
+  "ext": "svg"
+ },
+ "alpha": {
+  "author": "Eric Bentzen",
+  "license": "free for personal non-commercial use",
+  "ext": "svg"
+ },
+ "chess7": {
+  "author": "Style-7",
+  "license": "freeware",
+  "ext": "svg"
+ },
+ "companion": {
+  "author": "David L. Brown",
+  "license": "freeware",
+  "ext": "svg"
+ },
+ "leipzig": {
+  "author": "Armando Hernandez Marroquin",
+  "license": "freeware",
+  "ext": "svg"
+ },
+ "shahi-ivory-brown": {
+  "author": "Tamer Karatekin",
+  "license": "Şahî font licence (free, no modification)",
+  "ext": "svg"
+ }
+}

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#21201d">
+<script src="/pwa.js"></script>
+<title>Piece Sets</title>
+<style>
+:root {
+  --bg: #312e2b; --panel: #262421; --panel-2: #21201d; --panel-hover: #2f2d2a; --line: #3c3a37;
+  --text: #fff; --text-2: #bababa; --text-3: #8b8987;
+  --green: #81b64c; --green-dark: #45753c; --green-hover: #a3d160;
+  --sq-light: #ebecd0; --sq-dark: #739552; --hl-light: #f5f682; --hl-dark: #b9ca43; --arrow: #ffaa00;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI", system-ui, -apple-system, Arial, sans-serif; overflow-x: hidden; }
+a { color: inherit; text-decoration: none; }
+button, input { font: inherit; color: inherit; }
+
+.topbar { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: var(--panel-2); border-bottom: 1px solid #1a1917; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; }
+.brand img { width: 28px; height: 28px; }
+.nav { display: flex; gap: 4px; }
+.nav a { padding: 6px 12px; border-radius: 5px; font-weight: 700; color: var(--text-2); }
+.nav a:hover { background: var(--panel-hover); color: #fff; }
+.nav a.on { background: var(--panel); color: #fff; box-shadow: inset 0 -2px 0 var(--green); }
+
+.wrap { max-width: 1280px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.hero { display: grid; grid-template-columns: minmax(260px, 420px) 1fr; gap: 24px; background: var(--panel); border-radius: 8px; padding: 18px; align-items: center; }
+.hero .bd { width: 100%; }
+.hero h1 { margin: 0 0 4px; font-size: 28px; font-weight: 800; letter-spacing: .2px; text-transform: capitalize; }
+.hero .by { color: var(--text-2); margin-bottom: 10px; }
+.lic { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #3a3835; color: var(--text-2); }
+.strip { display: grid; grid-template-columns: repeat(6, 1fr); border-radius: 4px; overflow: hidden; margin: 18px 0; max-width: 480px; }
+.strip div { aspect-ratio: 1; position: relative; }
+.strip img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.l { background: var(--sq-light); } .d { background: var(--sq-dark); }
+.use { border: 0; border-radius: 6px; padding: 12px 22px; font-size: 17px; font-weight: 800; cursor: pointer; background: var(--green); color: #fff; box-shadow: 0 4px 0 var(--green-dark); }
+.use:hover { background: var(--green-hover); }
+.use:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--green-dark); }
+.use[disabled] { background: #3a3835; box-shadow: none; color: var(--text-2); cursor: default; transform: none; }
+.hint { color: var(--text-3); font-size: 12px; margin-top: 12px; }
+
+.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bar h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.bar .count { color: var(--text-3); font-weight: 600; }
+.search { margin-left: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; width: 240px; outline: none; }
+.search:focus { border-color: #5d5a57; }
+.seg { display: inline-flex; background: var(--panel); border-radius: 6px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-weight: 700; color: var(--text-2); font-size: 13px; }
+.seg button.on { background: #45423e; color: #fff; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border-radius: 8px; padding: 10px; cursor: pointer; position: relative; border: 2px solid transparent; }
+.card:hover { background: var(--panel-hover); }
+.card.sel { border-color: var(--green); }
+.card .mini { display: grid; grid-template-columns: repeat(6, 1fr); border-radius: 4px; overflow: hidden; }
+.card .mini div { aspect-ratio: 1; position: relative; }
+.card .mini img { position: absolute; inset: 4%; width: 92%; height: 92%; }
+.card .nm { margin-top: 8px; display: flex; align-items: baseline; gap: 6px; font-weight: 800; text-transform: capitalize; }
+.card .au { color: var(--text-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .lic { margin-top: 6px; font-size: 11px; }
+.card .check { position: absolute; top: 8px; right: 8px; background: var(--green); color: #fff; font-weight: 800; font-size: 11px; padding: 2px 8px; border-radius: 99px; display: none; }
+.card.sel .check { display: block; }
+.empty { color: var(--text-3); padding: 30px; text-align: center; grid-column: 1 / -1; }
+.foot { color: var(--text-3); font-size: 12px; }
+@media (max-width: 760px) { .hero { grid-template-columns: 1fr; } .search { margin-left: 0; width: 100%; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="/pieces/cburnett/wN.svg" alt=""> Lc0 Live</div>
+  <nav class="nav"><a href="/live">Live boards</a><a href="/">Analysis</a><a href="/net">Net</a><a href="/stats">Dashboard</a><a href="/pieces" class="on">Pieces</a></nav>
+</header>
+
+<div class="wrap">
+  <section class="hero">
+    <div class="bd" id="heroBoard"></div>
+    <div>
+      <h1 id="hName">–</h1>
+      <div class="by" id="hBy"></div>
+      <span class="lic" id="hLic"></span>
+      <div class="strip" id="hStrip"></div>
+      <button class="use" id="useBtn">Use this set</button>
+      <div class="hint">Hover a set to preview it here, click to choose it. Live boards and Analysis switch straight away, even in other open tabs.</div>
+    </div>
+  </section>
+
+  <div class="bar">
+    <h2>Piece sets</h2><span class="count" id="count"></span>
+    <div class="seg" id="segLic"><button data-v="all" class="on">All</button><button data-v="open">Open licence</button></div>
+    <input class="search" id="search" type="search" placeholder="Search sets or authors" autocomplete="off">
+  </div>
+  <main class="grid" id="grid"></main>
+  <p class="foot">Sets come from the Lichess source tree (lichess-org/lila). Each card shows its author and licence; “NC” licences allow personal, non-commercial use like this dashboard.</p>
+</div>
+
+<script src="/pieceset.js"></script>
+<script src="/board.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const SAMPLE = "r1bq1rk1/pp2bppp/2n1pn2/3p4/2PP4/2N1PN2/PP2BPPP/R1BQ1RK1"; // every piece type, both colours
+const ORDER_W = ["K", "Q", "R", "B", "N", "P"], ORDER_B = ORDER_W.map(c => c.toLowerCase());
+let SETS = {}, preview = null, filter = "all";
+const hero = new ChessUI.Board($("heroBoard"), { coords: true, animMs: 0, pieceSet: PieceSet.get() });
+hero.set(SAMPLE);
+
+const isOpen = lic => !/NC|freeware|personal|Şahî/i.test(lic);
+
+function showHero(name) {
+  const s = SETS[name]; if (!s) return;
+  preview = name;
+  const set = { name, ext: s.ext };
+  hero.pieceSet = set; hero.refreshPieces();
+  $("hName").textContent = name.replace(/-/g, " ");
+  $("hBy").textContent = "by " + s.author;
+  $("hLic").textContent = s.license;
+  $("hStrip").innerHTML = ORDER_W.map((c, i) => `<div class="${i % 2 ? "d" : "l"}"><img src="${PieceSet.url(c, set)}" alt="${c}"></div>`).join("")
+    + ORDER_B.map((c, i) => `<div class="${i % 2 ? "l" : "d"}"><img src="${PieceSet.url(c, set)}" alt="${c}"></div>`).join("");
+  const inUse = PieceSet.get().name === name;
+  $("useBtn").disabled = inUse;
+  $("useBtn").textContent = inUse ? "In use ✓" : "Use this set";
+}
+
+function choose(name) {
+  PieceSet.set(name, SETS[name].ext);
+  document.querySelectorAll(".card").forEach(c => c.classList.toggle("sel", c.dataset.name === name));
+  showHero(name);
+}
+
+function renderGrid() {
+  const q = $("search").value.trim().toLowerCase();
+  const names = Object.keys(SETS).sort((a, b) => a.localeCompare(b))
+    .filter(n => filter === "all" || isOpen(SETS[n].license))
+    .filter(n => !q || n.includes(q) || SETS[n].author.toLowerCase().includes(q));
+  const cur = PieceSet.get().name;
+  $("count").textContent = `${names.length} of ${Object.keys(SETS).length}`;
+  $("grid").innerHTML = names.length ? names.map(n => {
+    const s = SETS[n], set = { name: n, ext: s.ext };
+    const sq = (c, i, off) => `<div class="${(i + off) % 2 ? "d" : "l"}"><img src="${PieceSet.url(c, set)}" alt="" loading="lazy"></div>`;
+    return `<div class="card ${n === cur ? "sel" : ""}" data-name="${n}" tabindex="0" role="button" aria-label="Use ${n}">
+      <span class="check">In use</span>
+      <div class="mini">${ORDER_W.map((c, i) => sq(c, i, 0)).join("")}${ORDER_B.map((c, i) => sq(c, i, 1)).join("")}</div>
+      <div class="nm">${n.replace(/-/g, " ")}${n === "cburnett" ? '<span class="lic">default</span>' : ""}</div>
+      <div class="au">${s.author}</div>
+      <span class="lic">${s.license}</span></div>`;
+  }).join("") : `<div class="empty">No sets match “${q}”.</div>`;
+  document.querySelectorAll(".card").forEach(c => {
+    c.onmouseenter = () => showHero(c.dataset.name);
+    c.onclick = () => choose(c.dataset.name);
+    c.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(c.dataset.name); } };
+  });
+}
+
+$("grid").addEventListener("mouseleave", () => showHero(PieceSet.get().name));
+$("useBtn").onclick = () => preview && choose(preview);
+$("search").addEventListener("input", renderGrid);
+document.querySelectorAll("#segLic button").forEach(b => b.onclick = () => {
+  filter = b.dataset.v; document.querySelectorAll("#segLic button").forEach(x => x.classList.toggle("on", x === b)); renderGrid();
+});
+PieceSet.onChange(cur => { document.querySelectorAll(".card").forEach(c => c.classList.toggle("sel", c.dataset.name === cur.name)); showHero(cur.name); });
+
+fetch("/api/piecesets").then(r => r.json()).then(s => {
+  SETS = s;
+  if (!SETS[PieceSet.get().name]) PieceSet.set(PieceSet.DEFAULT.name, PieceSet.DEFAULT.ext);
+  renderGrid(); showHero(PieceSet.get().name);
+});
+</script>
+</body>
+</html>

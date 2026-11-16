@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#21201d">
+<script src="/pwa.js"></script>
+<title>Lc0 Live Boards</title>
+<style>
+:root {
+  --bg: #312e2b; --panel: #262421; --panel-2: #21201d; --panel-hover: #2f2d2a; --line: #3c3a37;
+  --text: #fff; --text-2: #bababa; --text-3: #8b8987;
+  --green: #81b64c; --green-dark: #45753c;
+  --sq-light: #ebecd0; --sq-dark: #739552; --hl-light: #f5f682; --hl-dark: #b9ca43;
+  --arrow: #ffaa00; --eval-white: #fff; --eval-black: #403d39; --draw: #8b8987;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI", system-ui, -apple-system, Arial, sans-serif; overflow-x: hidden; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; }
+
+.topbar { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: var(--panel-2); border-bottom: 1px solid #1a1917; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; }
+.brand img { width: 28px; height: 28px; }
+.nav { display: flex; gap: 4px; }
+.nav a { padding: 6px 12px; border-radius: 5px; font-weight: 700; color: var(--text-2); }
+.nav a:hover { background: var(--panel-hover); color: #fff; }
+.nav a.on { background: var(--panel); color: #fff; box-shadow: inset 0 -2px 0 var(--green); }
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--text-2); padding: 3px 9px; border-radius: 99px; background: #1b1a18; }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: #e02828; animation: pulse 1.6s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.ctrls { margin-left: auto; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.seg { display: inline-flex; background: var(--panel); border-radius: 6px; padding: 3px; gap: 2px; align-items: center; }
+.seg .lab { font-size: 11px; color: var(--text-3); font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 0 8px 0 6px; }
+.seg button { border: 0; background: transparent; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-weight: 700; color: var(--text-2); font-size: 13px; }
+.seg button:hover { color: #fff; }
+.seg button.on { background: #45423e; color: #fff; }
+
+.note { padding: 10px 16px 0; color: var(--text-3); font-size: 13px; max-width: 1800px; margin: 0 auto; }
+.note b { color: var(--text-2); }
+
+.grid { display: grid; gap: 16px; padding: 12px 16px 24px; max-width: 1800px; margin: 0 auto; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); }
+.card { background: var(--panel); border-radius: 8px; padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; position: relative; }
+.card:hover { box-shadow: 0 0 0 2px #45423e; }
+.pl { display: flex; align-items: center; gap: 8px; height: 26px; }
+.av { width: 24px; height: 24px; border-radius: 3px; display: grid; place-items: center; flex: none; }
+.av.w { background: #fff; } .av.b { background: #1b1a18; }
+.av img { width: 20px; height: 20px; }
+.pl .nm { font-weight: 700; font-size: 13px; }
+.pl .mat { color: var(--text-2); font-size: 12px; font-weight: 600; }
+.pl .clk { margin-left: auto; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 3px; background: #1b1a18; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.pl .clk.on { background: #fff; color: #312e2b; }
+.bw { display: flex; gap: 6px; }
+.ev { width: 12px; border-radius: 2px; overflow: hidden; position: relative; background: var(--eval-black); flex: none; }
+.ev .fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--eval-white); transition: height .4s ease; }
+.bd { flex: 1; min-width: 0; }
+.foot { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); min-height: 24px; }
+.foot .chip { font-weight: 800; padding: 2px 6px; border-radius: 3px; min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+.chip.w { background: #fff; color: #312e2b; } .chip.b { background: #1b1a18; color: #fff; }
+.foot .mv { font-weight: 700; color: #fff; }
+.foot .g { margin-left: auto; color: var(--text-3); white-space: nowrap; }
+.foot .delay { color: var(--text-3); white-space: nowrap; }
+.over { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 5; }
+.over div { background: rgba(38,36,33,.92); padding: 12px 20px; border-radius: 8px; text-align: center; box-shadow: 0 6px 20px rgba(0,0,0,.45); }
+.over b { display: block; font-size: 22px; }
+.over span { font-size: 12px; color: var(--text-2); }
+.empty { grid-column: 1 / -1; padding: 60px 16px; text-align: center; color: var(--text-3); }
+@media (max-width: 700px) { .grid { grid-template-columns: 1fr !important; } .ctrls { margin-left: 0; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="/pieces/cburnett/wN.svg" alt=""> Lc0 Live</div>
+  <nav class="nav"><a href="/live" class="on">Live boards</a><a href="/">Analysis</a><a href="/net">Net</a><a href="/stats">Dashboard</a><a href="/pieces">Pieces</a></nav>
+  <span class="live"><i></i><span id="liveText">LIVE REPLAY</span></span>
+  <div class="ctrls">
+    <div class="seg" id="segBoards"><span class="lab">Boards</span><button>4</button><button>6</button><button>9</button><button>12</button></div>
+    <div class="seg" id="segSpeed"><span class="lab">Speed</span><button data-v="1">Real</button><button data-v="2">2×</button><button data-v="5">5×</button></div>
+    <div class="seg" id="segArrows"><span class="lab">Arrows</span><button data-v="1">On</button><button data-v="0">Off</button></div>
+  </div>
+</header>
+<p class="note" id="note">Loading…</p>
+<main class="grid" id="grid"></main>
+
+<script src="/pieceset.js"></script>
+<script src="/board.js"></script>
+<script>
+const { Board, fmtEval } = window.ChessUI;
+const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+const S = {
+  boards: +store.get("lc0live.boards", 6), speed: +store.get("lc0live.speed", 1), arrows: store.get("lc0live.arrows", "1") === "1",
+  games: [], pacing: null, used: new Set(), slots: [], cache: new Map(),
+};
+const $ = id => document.getElementById(id);
+const spp = () => (S.pacing && S.pacing.sec_per_ply) || 5;            // real seconds per move in one game slot
+const stepMs = () => spp() * 1000 / S.speed;
+
+async function getGame(id) {
+  if (!S.cache.has(id)) S.cache.set(id, fetch(`/api/game/${encodeURIComponent(id)}`).then(r => r.json()));
+  return S.cache.get(id);
+}
+
+function makeSlot(i) {
+  const el = document.createElement("a");
+  el.className = "card"; el.target = "_blank";
+  el.innerHTML = `
+    <div class="pl" data-side="b"></div>
+    <div class="bw"><div class="ev"><div class="fill"></div></div><div class="bd"></div></div>
+    <div class="pl" data-side="w"></div>
+    <div class="foot"></div>`;
+  const slot = { i, el, game: null, idx: 0, nextAt: 0, doneUntil: 0, board: new Board(el.querySelector(".bd"), { coords: true, animMs: 260 }) };
+  return slot;
+}
+
+function layout() {
+  const n = S.boards, grid = $("grid");
+  const cols = n <= 4 ? 2 : n <= 9 ? 3 : 4;
+  grid.style.setProperty("--cols", cols);
+  // cap card width so the boards fit on screen vertically
+  grid.style.maxWidth = Math.max(560, Math.min(1800, Math.floor((window.innerHeight - 150) / Math.ceil(n / cols) * cols * 0.86))) + "px";
+  while (S.slots.length < n) { const s = makeSlot(S.slots.length); S.slots.push(s); grid.appendChild(s.el); }
+  while (S.slots.length > n) { const s = S.slots.pop(); if (s.game) S.used.delete(s.game.id); s.el.remove(); }
+}
+
+function pickNext() {
+  // newest finished game nobody is showing yet, so the replay stays as close to real time as it can
+  return S.games.find(g => !S.used.has(g.id)) || null;
+}
+
+async function load(slot, summary, startIdx = 0) {
+  S.used.add(summary.id);
+  slot.loading = true;
+  const g = await getGame(summary.id);
+  slot.loading = false;
+  if (slot.game && slot.game.id !== g.id) S.used.delete(slot.game.id);
+  slot.game = g; slot.idx = startIdx; slot.doneUntil = 0;
+  slot.el.querySelector(".over")?.remove();
+  slot.nextAt = performance.now() + stepMs() * (0.4 + Math.random() * 0.8);
+  draw(slot, false);
+}
+
+function draw(slot, animate) {
+  const g = slot.game, n = g.plies.length, i = slot.idx;
+  const p = i < n ? g.plies[i] : null, prev = i > 0 ? g.plies[i - 1] : null;
+  const fen = p ? p.fen : g.final_fen;
+  let arrows = [];
+  if (S.arrows && p && p.cands.length) arrows = [{ uci: p.cands[0].uci, w: .16, op: .75 }];
+  slot.board.set(fen, { last: prev ? prev.move : null, arrows, animate });
+
+  const q = p ? p.q : (g.result === "1-0" ? 1 : g.result === "0-1" ? -1 : 0);
+  slot.el.querySelector(".fill").style.height = (50 + 50 * Math.max(-1, Math.min(1, q))) + "%";
+  const board = slot.board.board, mat = { w: 0, b: 0 };
+  board.forEach(c => { if (c !== ".") mat[c === c.toUpperCase() ? "w" : "b"] += VAL[c.toLowerCase()]; });
+  const wtm = p ? p.white_to_move : null;
+  slot.el.querySelectorAll(".pl").forEach(pl => {
+    const side = pl.dataset.side, w = side === "w", diff = w ? mat.w - mat.b : mat.b - mat.w;
+    pl.innerHTML = `<div class="av ${side}"><img src="${PieceSet.url(side === "w" ? "K" : "k")}" alt=""></div>
+      <span class="nm">${w ? "White" : "Black"}</span><span class="mat">${diff > 0 ? "+" + diff : ""}</span>
+      <span class="clk ${wtm === w ? "on" : ""}">${wtm === w ? "thinking" : "&nbsp;"}</span>`;
+  });
+  // when (roughly) the move on screen was actually played: the game ended at g.summary.time,
+  // and each earlier move took about spp() seconds
+  const played = g.summary.time - (n - i) * spp();
+  const mins = Math.max(0, Math.round((Date.now() / 1000 - played) / 60));
+  let moveTxt = "start";
+  if (prev) {
+    const plyNo = i; // plies since the book position
+    const num = Math.floor((plyNo + (g.plies[0].white_to_move ? 1 : 2)) / 2);
+    moveTxt = `${num}.${prev.white_to_move ? "" : ".."} ${prev.san}`;
+  }
+  slot.el.querySelector(".foot").innerHTML = `
+    <span class="chip ${q >= 0 ? "w" : "b"}">${p ? fmtEval(q) : g.result.replace("1/2-1/2", "½-½")}</span>
+    <span class="mv">${moveTxt}</span>
+    <span class="delay">· ${mins} min ago</span>
+    <span class="g">${g.summary.game.replace("game_", "#").replace(/#0+(\d)/, "#$1")} · ${i}/${n}</span>`;
+  slot.el.href = `/?game=${encodeURIComponent(g.id)}&ply=${i}`;
+  slot.el.title = "Open this position in Analysis";
+}
+
+function finish(slot) {
+  const g = slot.game;
+  const txt = g.result === "1-0" ? "White wins" : g.result === "0-1" ? "Black wins" : "Draw";
+  slot.el.insertAdjacentHTML("beforeend", `<div class="over"><div><b>${g.result.replace("1/2-1/2", "½–½")}</b><span>${txt} · ${g.plies.length} plies</span></div></div>`);
+  slot.doneUntil = performance.now() + 6000;
+}
+
+function tick() {
+  const now = performance.now();
+  for (const s of S.slots) {
+    if (s.loading) continue;
+    if (!s.game) { const nx = pickNext(); if (nx) load(s, nx, 0); continue; }
+    if (s.doneUntil) {
+      if (now >= s.doneUntil) { const nx = pickNext(); if (nx) load(s, nx, 0); }
+      continue;
+    }
+    if (now >= s.nextAt) {
+      const n = s.game.plies.length;
+      if (s.idx < n) { s.idx++; draw(s, true); }
+      if (s.idx >= n) { finish(s); continue; }
+      // real move times vary; jitter keeps the boards from moving in lockstep
+      s.nextAt = now + stepMs() * (0.7 + Math.random() * 0.6);
+    }
+  }
+  setTimeout(tick, 150);
+}
+
+function renderNote() {
+  const pc = S.pacing;
+  $("note").innerHTML = pc && pc.sec_per_ply
+    ? `Your GPU plays <b>${pc.parallelism} games at once</b>, each lasting about <b>${pc.game_minutes} min</b> (≈${pc.sec_per_ply.toFixed(1)} s per move). A game becomes visible only when it ends, so each board replays a just-finished game ${S.speed === 1 ? "at the pace it was played" : `at ${S.speed}× that pace`}. <b>What you see is roughly one game-length behind.</b> Click a board to analyse it.`
+    : `Waiting for a few finished games to measure the pace…`;
+}
+
+async function poll(first) {
+  try {
+    const { games, stats } = await fetch("/api/games").then(r => r.json());
+    S.games = games; S.pacing = stats.pacing;
+    renderNote();
+    if (first) {
+      // tune in mid-game: start the newest games at staggered points
+      S.slots.forEach((s, k) => { const g = games[k]; if (g) load(s, g, Math.floor(Math.random() * g.positions * 0.6)); });
+    }
+  } catch (e) { $("note").textContent = "Server not reachable — is lc0viz.py running?"; }
+  setTimeout(() => poll(false), 10000);
+}
+
+function seg(id, cur, onPick) {
+  const el = $(id);
+  el.querySelectorAll("button").forEach(b => {
+    const v = b.dataset.v ?? b.textContent;
+    b.classList.toggle("on", String(v) === String(cur));
+    b.onclick = () => { el.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); onPick(v); };
+  });
+}
+seg("segBoards", S.boards, v => { S.boards = +v; store.set("lc0live.boards", v); layout(); });
+seg("segSpeed", S.speed, v => { S.speed = +v; store.set("lc0live.speed", v); S.slots.forEach(s => s.nextAt = Math.min(s.nextAt, performance.now() + stepMs())); renderNote(); });
+seg("segArrows", S.arrows ? 1 : 0, v => { S.arrows = v === "1"; store.set("lc0live.arrows", v); S.slots.forEach(s => s.game && draw(s, false)); });
+window.addEventListener("resize", () => { layout(); });
+PieceSet.onChange(() => S.slots.forEach(s => { s.board.refreshPieces(); if (s.game) draw(s, false); }));
+
+layout();
+poll(true).then(() => tick());
+</script>
+</body>
+</html>

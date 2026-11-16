@@ -1,0 +1,14 @@
+# Generated or downloaded at runtime (all rebuilt automatically).
+# Note: git only treats # as a comment at the start of a line.
+
+# saved training games (~110 MB a day)
+archive/
+# per-game stats and GPU history
+cache/
+# converted networks for the Net explorer (~0.7 GB each)
+nets/
+# Python env for the Net explorer's helper (requirements-net.txt)
+.venv/
+__pycache__/
+*.part
+.playwright-mcp/
